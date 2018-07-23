@@ -1,0 +1,319 @@
+/*
+ * Project:sparrow nest
+ * LastModified:18-4-21 上午3:19 by sukimiya
+ *
+ * Copyright (C) 2018.  e2x.io
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+.logo{
+    width:90px;
+    height: 90px;
+    background-image: url("/img/logo2.svg");
+    align-self: center!important;
+}
+
+body {
+    font-family: Helvetica, Tahoma, Arial, "Heiti SC", "Microsoft YaHei", "WenQuanYi Micro Hei";
+    font-family: Helvetica, Tahoma, Arial, "PingFang SC", "Hiragino Sans GB", "Heiti SC", "Microsoft YaHei", "WenQuanYi Micro Hei";
+}
+
+p.error {
+    font-weight: bold;
+    color: red;
+}
+
+div.logout {
+    float: right;
+}
+@font-face {font-family: 'iconfont';
+    src: url('../fonts/iconfont.eot');
+    src: url('../fonts/iconfont.eot?#iefix') format('embedded-opentype'),
+    url('../fonts/iconfont.woff') format('woff'),
+    url('../fonts/iconfont.ttf') format('truetype'),
+    url('../fonts/iconfont.svg#iconfont') format('svg');
+}
+body{
+    color: #2699FB;
+    background-color:#EAEAEA;
+}
+label{
+    font-size: 0.5em;
+}
+.iconfont{
+    font-family:"iconfont" !important;
+    font-size:16px;font-style:normal;
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-stroke-width: 0.2px;
+    -moz-osx-font-smoothing: grayscale;}
+.modal-header .close{
+    float: left;
+    margin: 0px;
+    opacity:1;
+    color: #2699FB;
+}
+.navbar-light .navbar-brand {
+    color: #2699FB;
+}
+.navbar-light .navbar-nav .active>.nav-link {
+    color: #007bff;
+    border-bottom: 2px solid #007bff;
+}
+.page-header{
+    height: 180px;
+}
+.page-header .option-btn-group{
+    margin-top: 160px;
+    position: absolute;
+    right: 40px;
+}
+.page-header .option-btn-group .option-btn{
+    width:42px;height:42px;
+    position: absolute;
+    right: 40px;
+}
+.icon-16px{
+    width:16px;height:16px;
+}
+.modal-title-blue{
+    color: #2699FB;
+}
+.form-control {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-size: 0.8rem;
+    color: #2699FB;
+    border: 1px solid #BCE0FD;
+}
+.text-muted {
+    color: #CCCCCC!important;
+}
+.form-check-label {
+    margin-left: 1em;
+    margin-right: 1em;
+}
+.btn {
+    padding: .75rem 1rem;
+    font-size: 0.8rem;
+}
+.modal-dialog{max-width:500px;margin:1.75rem auto;margin-top:0px;margin-bottom:0px;}
+.modal-footer{border-top: 0px solid transparent;}
+.modal-header{border-bottom: 0px solid transparent;}
+.modal-content{background-color: #F6F7F8;border: 0px solid transparent;}
+.modal-backdrop.show {
+    opacity: 1;
+}
+.modal-backdrop{
+    background-color: #F6F7F8;
+}
+.float-btn{
+    z-index: 100;
+}
+.s-page-content{
+    margin-top: 40px;
+    margin-bottom: 40px;
+    overflow-x: hidden;
+    overflow-y: scroll;
+    /*增加滚动的流畅性能*/
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+}
+.s-page-content.fully{
+    height:100%;
+}
+.navbar-toggler{
+    border: 0px solid transparent;
+}
+.search-box{
+    padding: 0rem 0rem;
+}
+.list-group-item.fully{
+    padding:0rem 0rem;
+    border:1px solid rgba(0,0,0,.125);
+}
+.search-box form div input{
+    border:1px solid transparent;
+    padding: .75rem 1.25rem;
+    border-bottom-left-radius:0px;
+    border-bottom-right-radius: 0px;
+    -webkit-border-bottom-left-radius: 0px;
+    -webkit-border-bottom-right-radius: 0px;
+}
+.search-box form .btn{
+    position: absolute;
+    right: 0px;
+    top: 0px;
+    z-index: 100;
+    border: 0px solid transparent;
+    height: 100%;
+}
+
+.list-group {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+/*Loading Bar*/
+.loadingBar {
+    position: absolute;
+    bottom: 0px;
+    right: 0px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: row;
+    border-bottom: 0px solid #F6F7F8;
+    padding-top: 1%;
+    padding-bottom: 1%;
+    text-align: center;
+    width:100%;
+    height: 100%;
+    background: #2699FB;
+    z-index: 2000;
+}
+.warpLogo{
+    position: absolute;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    flex-flow: row;
+    align-self: center;
+}
+.warpLog-row{
+    align-self: center!important;
+    align-items: center;
+    display: flex;
+    flex-flow: column;
+    width: 100%;
+}
+.showbox {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 5%;
+}
+
+.loader {
+    position: absolute;
+    bottom: 0px;
+    right: 0px;
+    overflow: hidden;
+    margin: 20px 20px;
+    width: 42px;
+}
+.loader:before {
+    content: '';
+    display: block;
+    padding-top: 100%;
+}
+
+.circular {
+    -webkit-animation: rotate 2s linear infinite;
+    animation: rotate 2s linear infinite;
+    height: 100%;
+    -webkit-transform-origin: center center;
+    transform-origin: center center;
+    width: 100%;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    margin: auto;
+}
+
+.path {
+    stroke-dasharray: 1, 200;
+    stroke-dashoffset: 0;
+    -webkit-animation: dash 1.5s ease-in-out infinite, color 6s ease-in-out infinite;
+    animation: dash 1.5s ease-in-out infinite, color 6s ease-in-out infinite;
+    stroke-linecap: round;
+}
+
+@-webkit-keyframes rotate {
+    100% {
+        -webkit-transform: rotate(360deg);
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes rotate {
+    100% {
+        -webkit-transform: rotate(360deg);
+        transform: rotate(360deg);
+    }
+}
+@-webkit-keyframes dash {
+    0% {
+        stroke-dasharray: 1, 200;
+        stroke-dashoffset: 0;
+    }
+    50% {
+        stroke-dasharray: 89, 200;
+        stroke-dashoffset: -35px;
+    }
+    100% {
+        stroke-dasharray: 89, 200;
+        stroke-dashoffset: -124px;
+    }
+}
+@keyframes dash {
+    0% {
+        stroke-dasharray: 1, 200;
+        stroke-dashoffset: 0;
+    }
+    50% {
+        stroke-dasharray: 89, 200;
+        stroke-dashoffset: -35px;
+    }
+    100% {
+        stroke-dasharray: 89, 200;
+        stroke-dashoffset: -124px;
+    }
+}
+@-webkit-keyframes color {
+    100%,
+    0% {
+        stroke: white;
+    }
+    40% {
+        stroke: white;
+    }
+    66% {
+        stroke: white;
+    }
+    80%,
+    90% {
+        stroke: white;
+    }
+}
+@keyframes color {
+    100%,
+    0% {
+        stroke: white;
+    }
+    40% {
+        stroke: white;
+    }
+    66% {
+        stroke: white;
+    }
+    80%,
+    90% {
+        stroke: white;
+    }
+}
