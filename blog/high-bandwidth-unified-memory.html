@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="从模型量化、KV Cache 与 MoE 出发，探讨内存容量、带宽和调度如何影响本地大模型，以及具身智能可能带来的计算架构变化。">
+  <title>从本地大模型到具身智能：为什么高带宽统一内存可能成为下一代 AI 计算的关键 | sukimiya's workshop</title>
+  <link rel="stylesheet" href="blog.css">
+</head>
+<body id="top">
+  <a class="skip-link" href="#main">跳到正文</a>
+  <header class="site-header"><nav aria-label="主导航">
+    <a class="brand" href="../index.html"><img src="../img/logo2.svg" width="30" height="30" alt="">sukimiya's workshop</a>
+    <div class="nav-links"><a href="../index.html">首页</a><a href="index.html" aria-current="true">Blog</a><a href="https://github.com/sukimiya">GitHub</a></div>
+  </nav></header>
+  <main id="main"><article><header class="article-header"><a class="eyebrow" href="index.html">BLOG / AI · 计算架构</a><h1>从本地大模型到具身智能：为什么高带宽统一内存可能成为下一代 AI 计算的关键</h1></header><details class="toc"><summary>文章目录</summary><ol><li><a href="#section-1">一、首先理解一个 LLM 为什么这么大</a></li><li><a href="#section-2">二、量化改变了本地部署的经济学</a></li><li><a href="#section-3">三、模型权重还不是全部：还有 KV Cache</a></li><li><a href="#section-4">四、容量、带宽和算力是三个完全不同的问题</a></li><li><a href="#section-5">五、为什么 LLM Decode 特别关注内存带宽</a></li><li><a href="#section-6">六、MoE 进一步改变了这个问题</a></li><li><a href="#section-7">七、传统 CPU RAM + GPU VRAM 架构的问题</a></li><li><a href="#section-8">八、统一内存为什么有意思</a></li><li><a href="#section-9">九、为什么统一内存尤其适合 MoE</a></li><li><a href="#section-10">十、Expert Scheduling 可能成为新的性能战场</a></li><li><a href="#section-11">十一、为什么不直接使用 HBM？</a></li><li><a href="#section-12">十二、GDDR 与 LPDDR 之间也存在一个有趣空间</a></li><li><a href="#section-13">十三、未来可能出现“LPDDR 与 HBM 之间”的新内存层</a></li><li><a href="#section-14">十四、但真正推动这种硬件出现的，可能不是 AIPC</a></li><li><a href="#section-15">十五、机器人为什么比 PC 更需要本地 AI？</a></li><li><a href="#section-16">十六、未来机器人不会只有一个 LLM</a></li><li><a href="#section-17">Robot Working Memory</a></li><li><a href="#section-18">十七、MoE 思想甚至可能扩展到整个机器人</a></li><li><a href="#section-19">十八、机器人可能重新定义“AI 芯片”的指标</a></li><li><a href="#section-20">十九、具身智能可能成为高带宽统一内存真正的规模化推动力</a></li><li><a href="#section-21">二十、最终得到的可能不是“一台更快的 PC”</a></li><li><a href="#section-22">二十一、从本地 LLM 到“真正属于个人的机器智能”</a></li><li><a href="#section-23">结语：真正的突破可能发生在“内存”而不是“算力”</a></li></ol></details><div class="prose"><p>过去谈到本地部署大语言模型，人们首先想到的问题通常是：</p>
+<p><strong>“我需要一块多好的 GPU？”</strong></p>
+<p>但如果真正分析一次 LLM 推理过程中发生了什么，会发现 GPU 算力只是问题的一部分。</p>
+<p>随着模型量化、MoE（Mixture of Experts）、超长上下文以及具身智能的发展，我越来越觉得，未来本地 AI 最值得关注的硬件指标，可能逐渐从单纯追求 GPU FLOPS/TOPS，转向三个更加基础的问题：</p>
+<p><strong>模型能不能装下？数据能不能足够快地送到计算单元？系统能不能聪明地调度这些数据？</strong></p>
+<p>换句话说：</p>
+<p><strong>Memory Capacity + Memory Bandwidth + Scheduling</strong></p>
+<p>可能成为下一代本地 AI 计算平台最重要的三个关键词。</p>
+<figure class="architecture-figure">
+  <a href="images/ai-memory-architecture.png" target="_blank" rel="noopener" aria-label="查看架构图原图（新标签页）">
+    <img src="images/ai-memory-architecture.png" width="1536" height="1024" alt="从本地大模型到具身智能的架构总览：Transformer 与 KV Cache、Dense 与 MoE、分离内存与统一内存、Expert 调度、机器人 AI 计算机及多模型协同系统。" decoding="async">
+  </a>
+  <figcaption>图 1 · 从本地大模型到具身智能：内存、带宽与调度的核心架构总览。<a href="images/ai-memory-architecture.png" target="_blank" rel="noopener">查看高清原图 ↗</a></figcaption>
+</figure>
+<hr>
+<h2 id="section-1">一、首先理解一个 LLM 为什么这么大</h2>
+<p>所谓 7B、70B、400B，本质上描述的是模型拥有多少参数。</p>
+<p>B 是 Billion，也就是十亿：</p>
+<ul><li>7B = 70 亿参数</li><li>70B = 700 亿参数</li><li>400B = 4000 亿参数</li></ul>
+<p>可以把参数粗略理解为神经网络训练过程中学习得到的大量数字。</p>
+<p>如果一个模型拥有 70B 参数，并使用 FP16/BF16 保存，那么每个参数需要大约 2 Bytes：</p>
+<pre><code>70B × 2 Bytes
+≈ 140 GB</code></pre>
+<p>也就是说，仅仅把一个 70B FP16 模型的权重放进内存，理论上就需要约 140GB。</p>
+<p>如果使用 FP32：</p>
+<pre><code>70B × 4 Bytes
+≈ 280 GB</code></pre>
+<p>这也是为什么大型模型天然对内存容量有非常高的要求。</p>
+<hr>
+<h2 id="section-2">二、量化改变了本地部署的经济学</h2>
+<p>真正让个人运行大型模型成为可能的重要技术之一，是 Quantization（量化）。</p>
+<p>例如将 FP16 权重压缩为 4-bit：</p>
+<pre><code>FP16
+16 bits / parameter
+
+↓
+
+INT4 / Q4
+约 4 bits / parameter</code></pre>
+<p>那么 70B 模型的理论权重大小就从：</p>
+<pre><code>70B × 16 bits
+≈ 140 GB</code></pre>
+<p>下降到：</p>
+<pre><code>70B × 4 bits
+≈ 35 GB</code></pre>
+<p>但这里有一个非常容易产生误解的地方。</p>
+<p><strong>Q4 并不意味着实际文件严格等于 4 bits/weight。</strong></p>
+<p>量化之后，还需要保存 scale、min 等辅助信息。</p>
+<p>例如某些 Q4 block 实际可能达到约：</p>
+<pre><code>4.5 bits / weight</code></pre>
+<p>那么：</p>
+<pre><code>70B × 4.5 / 8
+≈ 39.4 GB</code></pre>
+<p>除此之外，模型中还可能存在部分未量化或者采用更高精度保存的 Tensor，以及模型 metadata、tokenizer 等数据。</p>
+<p>因此工程上更有意义的指标其实是：</p>
+<p><strong>BPW — Bits Per Weight</strong></p>
+<p>而不仅仅是模型名字里的 Q4、Q5、Q6。</p>
+<p>可以用一个非常简单的公式快速估算：</p>
+<pre><code>模型权重大小
+≈ 参数量 × BPW / 8</code></pre>
+<p>例如一个 400B 模型：</p>
+<pre><code>400B × 4.5 / 8
+≈ 225 GB</code></pre>
+<p>这已经把问题从“需要多少 GPU 算力”转变成了另一个更加现实的问题：</p>
+<p><strong>这 225GB 权重到底放在哪里？</strong></p>
+<hr>
+<h2 id="section-3">三、模型权重还不是全部：还有 KV Cache</h2>
+<p>LLM 生成文本并不是一次把整个答案算出来，而是逐 Token 生成：</p>
+<pre><code>Token 1
+↓
+Token 2
+↓
+Token 3
+↓
+...</code></pre>
+<p>Transformer 在 Attention 中会产生 Key 和 Value。</p>
+<p>如果每生成一个新 Token，都重新计算前面所有 Token 的 Key/Value，计算成本会非常高。</p>
+<p>因此推理系统会把之前 Token 的 K 和 V 保存起来。</p>
+<p>这就是：</p>
+<p><strong>KV Cache（Key-Value Cache）</strong></p>
+<p>可以把它理解成 LLM 推理过程中的“短期工作记忆”。</p>
+<p>对于常见 Transformer，一个粗略的 KV Cache 估算可以写成：</p>
+<pre><code>KV Cache
+≈ Layers
+× Context Length
+× KV Heads
+× Head Dimension
+× 2（K + V）
+× 每元素字节数</code></pre>
+<p>因此 Context 越长：</p>
+<pre><code>8K
+↓
+32K
+↓
+128K
+↓
+1M</code></pre>
+<p>KV Cache 占用就越大。</p>
+<p>如果同时服务多个用户或者多个 Agent：</p>
+<pre><code>KV Cache
+× concurrent sequences</code></pre>
+<p>内存压力还会继续上升。</p>
+<p>所以真正运行一个模型时，内存账本更接近：</p>
+<pre><code>Model Weights
++
+KV Cache
++
+Compute Buffers / Activations
++
+Runtime
++
+Operating System
+=
+实际内存需求</code></pre>
+<p>这也是为什么一个“40GB 的模型文件”，并不意味着拥有 40GB 内存就可以舒服地运行。</p>
+<hr>
+<h2 id="section-4">四、容量、带宽和算力是三个完全不同的问题</h2>
+<p>讨论 AI 硬件时，一个非常重要的概念是：</p>
+<pre><code>Capacity ≠ Bandwidth ≠ Compute</code></pre>
+<p>例如：</p>
+<p><strong>128GB RAM</strong></p>
+<p>解决的是：</p>
+<blockquote><p>模型装不装得下？</p></blockquote>
+<p>而：</p>
+<p><strong>800GB/s Memory Bandwidth</strong></p>
+<p>解决的是：</p>
+<blockquote><p>每秒能够向计算单元输送多少模型权重和数据？</p></blockquote>
+<p>GPU 的：</p>
+<p><strong>TFLOPS / TOPS</strong></p>
+<p>解决的则是：</p>
+<blockquote><p>拿到数据以后能够多快完成矩阵计算？</p></blockquote>
+<p>这三件事情不能混为一谈。</p>
+<p>一个系统完全可能拥有：</p>
+<pre><code>256GB RAM</code></pre>
+<p>所以能装下一个很大的模型；</p>
+<p>但只有：</p>
+<pre><code>200GB/s Memory Bandwidth</code></pre>
+<p>结果就是：</p>
+<p><strong>模型能运行，但是 Token 生成速度很慢。</strong></p>
+<p>反过来，一块拥有巨大显存带宽的 GPU，如果只有 24GB VRAM，也可能面对：</p>
+<p><strong>算得非常快，但模型根本装不进去。</strong></p>
+<hr>
+<h2 id="section-5">五、为什么 LLM Decode 特别关注内存带宽</h2>
+<p>对于单用户、小 Batch 的自回归 LLM 推理，每生成一个 Token，都需要读取大量模型权重。</p>
+<p>因此很多情况下，Decode 阶段会表现出明显的 Memory-Bound 特征。</p>
+<p>可以做一个非常粗略但很有启发性的计算。</p>
+<p>假设某个模型每生成一个 Token 实际需要读取约 20B 参数：</p>
+<pre><code>Active Parameters = 20B
+Average BPW = 4.5</code></pre>
+<p>对应数据量约：</p>
+<pre><code>20B × 4.5 / 8
+≈ 11.25 GB</code></pre>
+<p>如果有效内存带宽为：</p>
+<pre><code>400 GB/s</code></pre>
+<p>忽略所有其他开销，理论带宽上限约：</p>
+<pre><code>400 / 11.25
+≈ 35.6 Token/s</code></pre>
+<p>如果内存带宽提高到：</p>
+<pre><code>800 GB/s</code></pre>
+<p>理论上限约：</p>
+<pre><code>800 / 11.25
+≈ 71 Token/s</code></pre>
+<p>如果达到：</p>
+<pre><code>1.6 TB/s</code></pre>
+<p>则约为：</p>
+<pre><code>1600 / 11.25
+≈ 142 Token/s</code></pre>
+<p>现实性能当然不会达到这个简单除法的理想值，因为还存在 Attention、KV Cache、Router、内存访问效率、计算、同步等大量开销。</p>
+<p>但这个简单模型揭示了一个非常重要的事实：</p>
+<p><strong>对于某些 LLM 推理场景，增加 Memory Bandwidth 的价值可能不亚于增加 GPU FLOPS。</strong></p>
+<hr>
+<h2 id="section-6">六、MoE 进一步改变了这个问题</h2>
+<p>Dense 模型有一个很直接的特点：</p>
+<p>如果模型拥有 70B 参数，那么一次 Token 推理基本需要经过整个网络的大部分参数。</p>
+<p>MoE 则不同。</p>
+<p>假设：</p>
+<pre><code>Total Parameters:   400B
+Active Parameters:   20B</code></pre>
+<p>完整模型拥有 400B 参数，但每个 Token 只激活其中的一部分 Expert。</p>
+<p>于是 MoE 出现了一种非常特殊的硬件需求：</p>
+<pre><code>Memory Capacity
+要求非常大
+因为整个模型需要被保存
+
+        +
+
+Compute Requirement
+相对总参数量小很多
+因为每个 Token 只激活部分 Expert</code></pre>
+<p>换句话说：</p>
+<p><strong>MoE 是一种“容量巨大，但稀疏计算”的模型。</strong></p>
+<p>这正是统一内存开始变得非常有吸引力的地方。</p>
+<hr>
+<h2 id="section-7">七、传统 CPU RAM + GPU VRAM 架构的问题</h2>
+<p>传统 PC 通常是：</p>
+<pre><code>CPU
+ │
+System RAM
+ │
+PCIe
+ │
+GPU
+ │
+VRAM</code></pre>
+<p>CPU 和 GPU 拥有各自独立的内存池。</p>
+<p>如果模型完全放得进 VRAM：</p>
+<pre><code>Model
+↓
+VRAM
+↓
+GPU</code></pre>
+<p>性能很好。</p>
+<p>但如果模型大于 VRAM，就可能需要：</p>
+<pre><code>RAM
+↕
+PCIe
+↕
+VRAM</code></pre>
+<p>进行 CPU/GPU Offloading。</p>
+<p>例如一个模型需要 80GB，而 GPU 只有 24GB VRAM，那么部分 Layer 或 Tensor 可以留在系统 RAM 中，部分放在 GPU。</p>
+<p>这让“大模型能够运行”成为可能，但 PCIe 数据传输、内存复制以及不同计算设备之间的协调都会产生额外成本。</p>
+<hr>
+<h2 id="section-8">八、统一内存为什么有意思</h2>
+<p>Apple Silicon 提供了另外一种思路：</p>
+<pre><code>              Unified Memory
+                    │
+        ┌───────────┼───────────┐
+        ↓           ↓           ↓
+       CPU         GPU         NPU</code></pre>
+<p>CPU 和 GPU 不再必须拥有完全分离的物理内存池。</p>
+<p>这带来了一个对大模型非常有价值的能力：</p>
+<p><strong>GPU 可以访问一个远大于普通消费级独显 VRAM 的统一内存空间。</strong></p>
+<p>所以统一内存真正吸引人的地方，并不一定是：</p>
+<blockquote><p>Apple GPU 比高端独立 GPU 更快。</p></blockquote>
+<p>而是：</p>
+<blockquote><p>在合理功耗和系统复杂度下，让 GPU 可以访问非常大的内存池。</p></blockquote>
+<p>对于 7B 模型，这种优势没有那么明显。</p>
+<p>但当模型进入：</p>
+<pre><code>70B
+100B
+200B
+400B
+700B</code></pre>
+<p>问题就完全不同了。</p>
+<hr>
+<h2 id="section-9">九、为什么统一内存尤其适合 MoE</h2>
+<p>假设未来有一个：</p>
+<pre><code>400B Total Parameters
+20B Active Parameters
+4.5 BPW</code></pre>
+<p>完整权重大约：</p>
+<pre><code>400B × 4.5 / 8
+≈ 225 GB</code></pre>
+<p>如果系统拥有：</p>
+<pre><code>256GB Unified Memory</code></pre>
+<p>理论上已经开始接近让整个模型常驻 GPU 可访问内存的条件。</p>
+<p>如果拥有：</p>
+<pre><code>512GB Unified Memory</code></pre>
+<p>则可以同时容纳：</p>
+<pre><code>Model Weights
+KV Cache
+Runtime
+World State
+Other Models
+Operating System</code></pre>
+<p>此时真正的问题从：</p>
+<p><strong>“模型放在哪里？”</strong></p>
+<p>转变成：</p>
+<p><strong>“如何让 GPU 以最高效率访问当前需要的 Expert？”</strong></p>
+<p>这就是一个完全不同的优化空间。</p>
+<hr>
+<h2 id="section-10">十、Expert Scheduling 可能成为新的性能战场</h2>
+<p>MoE 中并不是所有 Expert 每个 Token 都参与计算。</p>
+<p>因此理想的推理系统可以尝试分析：</p>
+<pre><code>Router
+↓
+当前 Token
+↓
+需要哪些 Expert？
+↓
+这些 Expert 在哪里？
+↓
+下一层可能需要哪些 Expert？</code></pre>
+<p>进而实现：</p>
+<pre><code>Expert Cache
++
+Expert Prefetch
++
+Routing Locality Optimization
++
+Asynchronous Transfer
++
+Memory Tiering</code></pre>
+<p>例如：</p>
+<pre><code>              Full Model
+            Unified Memory
+                 │
+                 ↓
+               Router
+                 │
+        ┌────────┴────────┐
+        ↓                 ↓
+   Hot Experts       Cold Experts
+        │
+   Fast Memory
+        │
+       GPU</code></pre>
+<p>如果系统能够预测接下来可能访问哪些 Expert，就可以提前 Prefetch。</p>
+<p>如果某些 Expert 在一段任务中频繁出现，就可以保持在更高速的缓存层。</p>
+<p>这时候 LLM Runtime 已经不再只是一个“矩阵计算程序”。</p>
+<p>它越来越像：</p>
+<p><strong>神经网络推理引擎 + CPU Cache + 虚拟内存系统 + 数据库 Buffer Pool + Scheduler</strong></p>
+<p>的结合。</p>
+<p>换句话说：</p>
+<p><strong>软件调度本身可能创造“有效带宽”。</strong></p>
+<hr>
+<h2 id="section-11">十一、为什么不直接使用 HBM？</h2>
+<p>这会自然引出一个问题：</p>
+<p>既然 LLM 如此需要内存带宽，为什么不直接给统一内存使用 HBM？</p>
+<p>答案是：</p>
+<p><strong>技术上完全可以。</strong></p>
+<p>Unified Memory 描述的是系统的内存共享方式。</p>
+<p>HBM、GDDR、LPDDR 描述的是不同的物理内存技术。</p>
+<p>所以理论上完全可以设计：</p>
+<pre><code>CPU ─┐
+GPU ─┼── 512GB HBM Unified Memory
+NPU ─┘</code></pre>
+<p>对于 AI 来说，这甚至是一种非常理想的架构。</p>
+<p>问题在于：</p>
+<p><strong>成本。</strong></p>
+<p>HBM 需要复杂的堆叠 DRAM、超宽 I/O、先进封装以及复杂的芯片互连。</p>
+<p>它非常适合昂贵的数据中心 GPU，但对于消费级设备而言，目前仍然过于昂贵。</p>
+<hr>
+<h2 id="section-12">十二、GDDR 与 LPDDR 之间也存在一个有趣空间</h2>
+<p>GDDR 提供比普通 DDR/LPDDR 更高的带宽。</p>
+<p>理论上完全可以构建：</p>
+<pre><code>CPU
+ │
+GPU
+ │
+NPU
+ │
+256GB GDDR Unified Memory
+ │
+~1TB/s</code></pre>
+<p>但 GDDR 的设计更偏向 GPU 的高吞吐访问模式，而 CPU 更敏感于低延迟和能效。</p>
+<p>因此今天的通用计算 SoC 使用 LPDDR 是一个很合理的折中：</p>
+<pre><code>CPU Performance     ✓
+GPU Access          ✓
+Large Capacity      ✓
+Low Power           ✓
+Cost                ✓
+Bandwidth           ○</code></pre>
+<p>但随着 AI workload 占比越来越高，这个最优解可能发生变化。</p>
+<hr>
+<h2 id="section-13">十三、未来可能出现“LPDDR 与 HBM 之间”的新内存层</h2>
+<p>真正有意思的未来未必是：</p>
+<pre><code>LPDDR
+vs
+GDDR
+vs
+HBM</code></pre>
+<p>三选一。</p>
+<p>而可能出现一种新的 Memory Tier：</p>
+<p><strong>比 LPDDR 更宽、更快；比 HBM 更便宜、容量更大。</strong></p>
+<p>例如：</p>
+<pre><code>              AI SoC
+       ┌────────────────┐
+       │ CPU / GPU / NPU│
+       └───────┬────────┘
+               │
+        Wide Memory Fabric
+               │
+      ┌────────┼────────┐
+      ↓        ↓        ↓
+   Stack 0   Stack 1   Stack 2 ...</code></pre>
+<p>假设：</p>
+<pre><code>8 × 64GB
+= 512GB</code></pre>
+<p>每个 Memory Stack 提供：</p>
+<pre><code>200GB/s</code></pre>
+<p>聚合带宽就是：</p>
+<pre><code>8 × 200GB/s
+= 1.6TB/s</code></pre>
+<p>这已经非常接近一台为本地大模型专门设计的 Memory-Centric AI Computer。</p>
+<p>它不一定追求最高 FP32 FLOPS。</p>
+<p>它真正追求的是：</p>
+<pre><code>Unified Memory       512GB
+Memory Bandwidth     1.6TB/s
+Low Precision        INT4 / FP8
+Power                可接受
+Cost                 可量产</code></pre>
+<hr>
+<h2 id="section-14">十四、但真正推动这种硬件出现的，可能不是 AIPC</h2>
+<p>这也是整个推导中我觉得最有意思的地方。</p>
+<p>如果市场只是：</p>
+<p><strong>“少数 AI 爱好者想在家里运行 400B 模型。”</strong></p>
+<p>那么芯片厂商未必有足够动力制造这种奇怪的硬件。</p>
+<p>但是，如果未来出现：</p>
+<p><strong>数百万台具身智能机器人需要本地运行大型 AI 模型</strong></p>
+<p>整个经济模型就不同了。</p>
+<hr>
+<h2 id="section-15">十五、机器人为什么比 PC 更需要本地 AI？</h2>
+<p>对于 PC：</p>
+<pre><code>Local AI
+vs
+Cloud AI</code></pre>
+<p>很多时候只是成本、隐私和体验之间的选择。</p>
+<p>对于机器人而言：</p>
+<p><strong>Local AI 很可能是基本能力。</strong></p>
+<p>原因非常简单：</p>
+<p>机器人需要与真实世界形成闭环。</p>
+<p>不同任务存在不同时间尺度：</p>
+<pre><code>1~10 ms
+Motor / Balance / Torque Control
+
+10~100 ms
+Vision / Perception / Motion
+
+100 ms ~ seconds
+VLM / VLA / Planning / Reasoning</code></pre>
+<p>如果所有决策都经过：</p>
+<pre><code>Robot
+↓
+Internet
+↓
+Cloud
+↓
+LLM
+↓
+Internet
+↓
+Robot</code></pre>
+<p>网络延迟、抖动和断网都会成为系统可靠性的一部分。</p>
+<p>因此更合理的架构可能是：</p>
+<pre><code>                 Cloud
+       Training / Updates / Heavy Tasks
+                   │
+                   ↓
+              Robot Brain
+                   │
+       ┌───────────┼───────────┐
+       ↓           ↓           ↓
+      VLM         LLM      World Model
+       │           │           │
+       └───────────┼───────────┘
+                   ↓
+                  VLA
+                   ↓
+              Robot Control
+                   ↓
+              Physical Body</code></pre>
+<p>即：</p>
+<p><strong>Cloud Training + Local Inference</strong></p>
+<hr>
+<h2 id="section-16">十六、未来机器人不会只有一个 LLM</h2>
+<p>真正的具身智能系统很可能同时运行：</p>
+<pre><code>Vision
++
+VLM
++
+LLM
++
+World Model
++
+VLA
++
+Speech Recognition
++
+Speech Synthesis
++
+Navigation
++
+Manipulation
++
+Long-Term Memory</code></pre>
+<p>这又让统一内存的意义发生了一次变化。</p>
+<p>它不再只是：</p>
+<p><strong>“一个可以放 400B 模型的大内存。”</strong></p>
+<p>而可能成为：</p>
+<h3 id="section-17">Robot Working Memory</h3>
+<p>里面同时保存：</p>
+<pre><code>Model Weights
+KV Cache
+Camera Features
+Spatial Map
+Object States
+World State
+Robot State
+Conversation
+Episodic Memory
+Personal Knowledge</code></pre>
+<p>CPU、GPU、NPU 以及其他专用加速器都可以访问这些数据。</p>
+<p>这可能比单纯让一个 LLM 跑得更快更加重要。</p>
+<hr>
+<h2 id="section-18">十七、MoE 思想甚至可能扩展到整个机器人</h2>
+<p>今天 MoE 的 Expert 通常存在于一个神经网络内部：</p>
+<pre><code>Router
+├── Expert 1
+├── Expert 7
+└── Expert 31</code></pre>
+<p>但未来具身智能也可能形成一种更宏观的 Conditional Compute：</p>
+<pre><code>                    Robot
+                      │
+                 AI Scheduler
+                      │
+       ┌──────────────┼──────────────┐
+       ↓              ↓              ↓
+    Language        Vision         Action
+       │              │              │
+       ↓              ↓              ↓
+   Conversation    Perception    Manipulation
+                      │
+                      ↓
+                 World Model</code></pre>
+<p>例如机器人正在与你聊天：</p>
+<pre><code>Language
+Speech
+Memory</code></pre>
+<p>占据主要计算资源。</p>
+<p>当你说：</p>
+<blockquote><p>“把桌上的红色杯子拿给我。”</p></blockquote>
+<p>计算路径可能切换为：</p>
+<pre><code>Speech
+↓
+Language Understanding
+↓
+Object Grounding
+↓
+Vision
+↓
+Spatial Reasoning
+↓
+World Model
+↓
+Manipulation
+↓
+Motor Policy</code></pre>
+<p>并不是所有 AI 模块都需要一直以最高性能运行。</p>
+<p>这实际上就是更高层次的：</p>
+<p><strong>Sparse Compute / Conditional Compute。</strong></p>
+<hr>
+<h2 id="section-19">十八、机器人可能重新定义“AI 芯片”的指标</h2>
+<p>今天营销 AI 芯片时，经常首先强调：</p>
+<pre><code>TOPS
+TFLOPS
+GPU Cores</code></pre>
+<p>但未来 Robot AI Computer 更值得关注的可能是：</p>
+<pre><code>Unified Memory Capacity
+Memory Bandwidth
+INT4 / FP8 Throughput
+Active Parameters / Watt
+KV Cache Capacity
+Memory Latency
+Real-Time Control Latency
+Sensor Bandwidth
+Power Consumption</code></pre>
+<p>一台理想的机器人 AI 计算机可能更像：</p>
+<pre><code>              Robot AI Computer
+
+        256~512GB Unified Memory
+                  │
+             1~2TB/s
+                  │
+       ┌──────────┼──────────┐
+       ↓          ↓          ↓
+      CPU        GPU        NPU
+       │          │          │
+   Planning     VLM/VLA    Vision
+   Routing       LLM       Speech
+
+                  │
+           Real-Time Cores
+                  │
+          Motor / Sensors</code></pre>
+<p>而且还必须满足一个数据中心 GPU 很少面对的条件：</p>
+<pre><code>Power       &lt; 100~300W
+Weight      足够低
+Cooling     可装进机器人
+Offline     可以工作
+Latency     可预测
+Cost        可以量产</code></pre>
+<hr>
+<h2 id="section-20">十九、具身智能可能成为高带宽统一内存真正的规模化推动力</h2>
+<p>假设未来只是：</p>
+<pre><code>10 万个本地 LLM 爱好者</code></pre>
+<p>需要 512GB 高带宽统一内存。</p>
+<p>这种市场可能不足以推动整个 DRAM 与封装产业发生变化。</p>
+<p>但如果未来出现：</p>
+<pre><code>1,000,000 Robots
+↓
+10,000,000 Robots
+↓
+100,000,000 Robots</code></pre>
+<p>情况就完全不同。</p>
+<p>每台机器人都需要：</p>
+<pre><code>128~512GB Memory
++
+High Bandwidth
++
+Low-Power AI SoC
++
+INT4 / FP8 Matrix Engines
++
+Sensors
++
+Actuators</code></pre>
+<p>这会形成巨大的规模经济。</p>
+<p>今天昂贵的：</p>
+<pre><code>Stacked DRAM
+Wide Memory Bus
+Advanced Packaging
+Large Unified Memory</code></pre>
+<p>可能因此逐渐降低成本。</p>
+<p>然后这些技术又可能反向进入：</p>
+<pre><code>Robot
+↓
+Workstation
+↓
+AI PC
+↓
+Consumer Computer</code></pre>
+<hr>
+<h2 id="section-21">二十、最终得到的可能不是“一台更快的 PC”</h2>
+<p>而是一种新的计算机。</p>
+<p>过去几十年个人计算机的基本架构是：</p>
+<pre><code>CPU
++
+RAM
++
+Storage
++
+GPU</code></pre>
+<p>未来 AI-native Computer 可能更接近：</p>
+<pre><code>Large Unified Memory
+        +
+Heterogeneous Compute
+        +
+Sparse Models
+        +
+Conditional Compute
+        +
+Intelligent Memory Scheduling
+        +
+Persistent AI Memory</code></pre>
+<p>其中最重要的资源可能不再只是 CPU Cycle。</p>
+<p>而是：</p>
+<p><strong>AI Memory。</strong></p>
+<hr>
+<h2 id="section-22">二十一、从本地 LLM 到“真正属于个人的机器智能”</h2>
+<p>这也是我认为本地部署最值得期待的地方。</p>
+<p>如果未来个人拥有一个机器人，它真正有价值的部分可能不只是出厂时下载的 LLM 权重。</p>
+<p>而是它在几年中积累的：</p>
+<pre><code>你的项目
+你的作品
+你教给它的技能
+家庭空间地图
+物品的位置
+长期记忆
+共同经历
+个人知识库
+工作上下文</code></pre>
+<p>如果所有这些东西都存在云端，那么这台机器人本质上仍然更接近：</p>
+<p><strong>一个云端 AI 服务的物理终端。</strong></p>
+<p>但如果主要模型、长期记忆、空间记忆和个人知识都能够运行、存储在本地：</p>
+<pre><code>              Your Robot
+                  │
+        ┌─────────┼─────────┐
+        ↓         ↓         ↓
+      Models    Memory    Skills
+        │         │         │
+        └─────────┼─────────┘
+                  ↓
+             Local AI</code></pre>
+<p>它才真正开始接近：</p>
+<p><strong>一个由个人拥有的智能系统。</strong></p>
+<hr>
+<h2 id="section-23">结语：真正的突破可能发生在“内存”而不是“算力”</h2>
+<p>我们习惯于把 AI 进步理解成：</p>
+<blockquote><p>GPU 更快了。</p></blockquote>
+<p>但对于下一阶段的本地 AI，真正关键的突破也许来自另外一条路线：</p>
+<pre><code>更大的内存容量
+        ↓
+更高的内存带宽
+        ↓
+更低的模型 BPW
+        ↓
+更稀疏的模型架构
+        ↓
+更聪明的 Expert Scheduling
+        ↓
+更高效的异构计算</code></pre>
+<p>最终形成：</p>
+<p><strong>Memory-Centric AI Computing。</strong></p>
+<p>如果这条路线成立，那么本地大模型、AI PC、自动驾驶和具身智能，看起来彼此不同，底层可能正在提出同一个问题：</p>
+<blockquote><p><strong>如何在有限的成本和功耗下，让一台机器拥有足够大的“AI 大脑”，并以足够高的带宽持续运行它？</strong></p></blockquote>
+<p>而一旦机器人产业把这种需求推到百万甚至千万级规模，大容量、高带宽统一内存就不再只是少数本地 LLM 爱好者想象中的昂贵配置。</p>
+<p>它可能成为一种新的基础计算平台。</p>
+<p>到那时，普通人在可承受的价格范围内拥有一个长期陪伴自己的机器人，也许不再是遥远的科幻场景。</p>
+<p>它可以陪我们工作、学习和娱乐，也可以与我们共同创作。</p>
+<p>更重要的是，它所拥有的模型、技能、长期记忆和个人知识，可以主要存在于我们自己的设备中，而不是永远依赖远方的数据中心。</p>
+<p>所以，本地大模型真正值得期待的未来，或许从来都不只是：</p>
+<p><strong>“什么时候我能在家里运行一个 700B 模型？”</strong></p>
+<p>真正的问题可能是：</p>
+<p><strong>“什么时候强大的机器智能，会从一种我们通过网络租用的服务，变成一种普通人真正可以拥有的计算能力？”</strong></p>
+<p>如果那一天到来，它带来的变化，可能远远超过今天所谓的“AIPC”。</p>
+<p>它意味着机器智能第一次真正从数据中心走进了个人世界。</p></div></article></main>
+  <footer><a href="index.html">返回 Blog</a><a href="#top">回到顶部 ↑</a><span>sukimiya's workshop</span></footer>
+</body>
+</html>
