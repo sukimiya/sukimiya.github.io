@@ -1,0 +1,1637 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="在语义压缩基础上引入 Reaction、Cognition 与 Safety 三条路径，让具身智能同时具备实时反应、目标驱动思考和安全执行能力。">
+  <title>Temporal Semantic Runtime v2.0 | sukimiya's workshop</title>
+  <link rel="stylesheet" href="blog.css">
+</head>
+<body id="top">
+  <a class="skip-link" href="#main">跳到正文</a>
+  <header class="site-header"><nav aria-label="主导航">
+    <a class="brand" href="../index.html"><img src="../img/logo2.svg" width="30" height="30" alt="">sukimiya's workshop</a>
+    <div class="nav-links"><a href="../index.html">首页</a><a href="index.html" aria-current="true">Blog</a><a href="https://github.com/sukimiya">GitHub</a></div>
+  </nav></header>
+  <main id="main"><article>
+    <header class="article-header"><a class="eyebrow" href="index.html">BLOG / AI · 具身智能</a><h1>Temporal Semantic Runtime v2.0</h1><p class="article-deck">A Dual-Path Cognitive Runtime for Embodied Agents</p></header>
+    <details class="toc"><summary>文章目录</summary><ol><li><a href="#section-1">1. 项目目标</a></li><li><a href="#section-2">2. 从 v1.0 到 v2.0</a></li><li><a href="#section-3">3. 核心设计思想</a></li><li><a href="#section-4">4. 总体架构</a></li><li><a href="#section-5">5. 三条执行路径</a></li><li><a href="#section-6">6. Safety Path</a></li><li><a href="#section-7">7. Reaction Path</a></li><li><a href="#section-8">8. Cognitive Path</a></li><li><a href="#section-9">9. Dual-Path Intelligence</a></li><li><a href="#section-10">10. World Model</a></li><li><a href="#section-11">11. Temporal Semantic Path</a></li><li><a href="#section-12">12. ΔWorld</a></li><li><a href="#section-13">13. Event</a></li><li><a href="#section-14">14. Episode</a></li><li><a href="#section-15">15. Evidence Chain</a></li><li><a href="#section-16">16. Situation Model</a></li><li><a href="#section-17">17. Domain Semantic Engines</a></li><li><a href="#section-18">18. Agent Runtime</a></li><li><a href="#section-19">19. Goal Manager</a></li><li><a href="#section-20">20. Goal Hierarchy</a></li><li><a href="#section-21">21. Goal Stack</a></li><li><a href="#section-22">22. Attention</a></li><li><a href="#section-23">23. Cognitive Escalation</a></li><li><a href="#section-24">24. Uncertainty</a></li><li><a href="#section-25">25. Active Perception</a></li><li><a href="#section-26">26. Deliberative Cognition</a></li><li><a href="#section-27">27. Mahjong 示例</a></li><li><a href="#section-28">28. Intent</a></li><li><a href="#section-29">29. Intent 与 Action 分离</a></li><li><a href="#section-30">30. Action Layer</a></li><li><a href="#section-31">31. Action Arbitration</a></li><li><a href="#section-32">32. Reaction Report</a></li><li><a href="#section-33">33. Cognitive → Reaction</a></li><li><a href="#section-34">34. 多时间尺度智能</a></li><li><a href="#section-35">35. Cognition 不阻塞 Real-time Control</a></li><li><a href="#section-36">36. 两种学习</a></li><li><a href="#section-37">37. Memory Architecture</a></li><li><a href="#section-38">38. Domain 与 Cognition 的边界</a></li><li><a href="#section-39">39. Event 与 Action 解耦</a></li><li><a href="#section-40">40. Runtime 核心模块</a></li><li><a href="#section-41">41. Runtime 核心接口</a></li><li><a href="#section-42">42. v2.0 的核心闭环</a></li><li><a href="#section-43">43. v2.0 的核心原则</a></li><li><a href="#section-44">44. 项目的最终定位</a></li><li><a href="#section-45">45. 最终设计思想</a></li></ol></details>
+    <div class="prose"><p><strong>Version:</strong> 2.0 <strong>Status:</strong> Architecture Draft <strong>Target:</strong> Local Embodied AI / Companion Robot / General-purpose Agent Runtime</p>
+<hr>
+<h2 id="section-1">1. 项目目标</h2>
+<p>Temporal Semantic Runtime 的目标不是构建一个：</p>
+<pre><code>Sensor → Model → Action</code></pre>
+<p>式的 Reaction Machine。</p>
+<p>目标是构建一个能够同时拥有：</p>
+<pre><code>快速反应
++
+持续理解
++
+情境认知
++
+目标驱动
++
+长期记忆
++
+复杂思考
++
+自主决策</code></pre>
+<p>的 Embodied Agent Runtime。</p>
+<p>核心原则：</p>
+<blockquote><p><strong>Reaction 是机器人的能力，Deliberation 才是机器人复杂行为决策的来源。</strong></p></blockquote>
+<p>机器人必须能够快速 Reaction，但不能被 Reaction 所定义。</p>
+<hr>
+<h2 id="section-2">2. 从 v1.0 到 v2.0</h2>
+<p>Temporal Semantic Runtime v1.0 主要解决：</p>
+<blockquote><p>如何把连续、高频、低层的现实世界状态流，转换成稀疏、结构化、具有时间意义的“事情”。</p></blockquote>
+<p>核心流程：</p>
+<pre><code>Perception
+    ↓
+World State
+    ↓
+ΔWorld
+    ↓
+Event
+    ↓
+Episode
+    ↓
+LLM</code></pre>
+<p>即：</p>
+<pre><code>Continuous Reality
+        ↓
+Semantic Compression
+        ↓
+Things That Happened</code></pre>
+<p>v2.0 在此基础上继续回答：</p>
+<blockquote><p>世界发生了什么之后，机器人应该如何根据当前 Situation、Goal、Role、Memory 和可能后果决定自己应该做什么？</p></blockquote>
+<p>同时还必须解决：</p>
+<blockquote><p>当机器人正在思考时，如何继续实时反应？</p></blockquote>
+<p>因此 v2.0 引入：</p>
+<pre><code>Situation Model
+
+Goal Manager
+
+Agent Runtime
+
+Reaction Path
+
+Cognitive Path
+
+Cognitive Escalation
+
+Intent
+
+Action Arbitration
+
+Safety Path</code></pre>
+<p>形成完整的 Dual-Path Cognitive Architecture。</p>
+<hr>
+<h2 id="section-3">3. 核心设计思想</h2>
+<p>Temporal Semantic Runtime v2.0 不再采用：</p>
+<pre><code>Observation
+    ↓
+Action</code></pre>
+<p>作为机器人智能的主要抽象。</p>
+<p>而采用：</p>
+<pre><code>Observation
+    ↓
+What changed?
+    ↓
+What happened?
+    ↓
+What situation am I in?
+    ↓
+What am I trying to achieve?
+    ↓
+What do I know?
+    ↓
+What choices do I have?
+    ↓
+What may happen?
+    ↓
+What should I do?
+    ↓
+Intent
+    ↓
+How should I execute it?</code></pre>
+<p>因此整个系统被划分成不同时间尺度、不同职责的智能层。</p>
+<hr>
+<h2 id="section-4">4. 总体架构</h2>
+<pre><code>                         REAL WORLD
+                             │
+                             ▼
+                        PERCEPTION
+                             │
+                             ▼
+                       WORLD MODEL
+                             │
+             ┌───────────────┼────────────────┐
+             │               │                │
+             ▼               ▼                ▼
+       SAFETY PATH      REACTION PATH    SEMANTIC PATH
+             │               │                │
+             │               │             ΔWorld
+             │               │                ↓
+             │               │              Event
+             │               │                ↓
+             │               │             Episode
+             │               │                ↓
+             │               │            Situation
+             │               │                │
+             │               │                ▼
+             │               │        ┌───────────────┐
+             │               │        │ AGENT RUNTIME │
+             │               │        │               │
+             │               │        │ Attention     │
+             │               │        │ Goal Manager  │
+             │               │        │ Role/Mission  │
+             │               │        │ Memory        │
+             │               │        │ Decision Route│
+             │               │        └───────┬───────┘
+             │               │                │
+             │               │        cognitive needed?
+             │               │                │
+             │               │                ▼
+             │               │         COGNITIVE PATH
+             │               │                │
+             │               │        LLM / Reasoner
+             │               │                │
+             │               │             Intent
+             │               │                │
+             └───────────────┼────────────────┘
+                             │
+                             ▼
+                    ACTION ARBITRATION
+                             │
+                             ▼
+                       ACTION LAYER
+                             │
+                    Skill / VLA / Policy
+                             │
+                    Controller / Motor
+                             │
+                             ▼
+                         REAL WORLD</code></pre>
+<hr>
+<h2 id="section-5">5. 三条执行路径</h2>
+<p>v2.0 中存在三条不同性质的路径：</p>
+<pre><code>Safety Path
+Reaction Path
+Cognitive Path</code></pre>
+<p>其中：</p>
+<pre><code>Safety Path
+    =
+保证机器人和人的基本安全
+
+Reaction Path
+    =
+快速处理已经知道如何处理的问题
+
+Cognitive Path
+    =
+处理需要理解、权衡、规划和推理的问题</code></pre>
+<p>三者同时运行，而不是互相替代。</p>
+<hr>
+<h2 id="section-6">6. Safety Path</h2>
+<p>Safety 不应该依赖通用 LLM。</p>
+<p>例如：</p>
+<pre><code>Human enters unsafe region
+        ↓
+Safety Path
+        ↓
+STOP</code></pre>
+<p>而不是：</p>
+<pre><code>Camera
+ ↓
+LLM
+ ↓
+“我认为应该停止”</code></pre>
+<p>Safety Path 应该具有最高执行约束权。</p>
+<p>例如：</p>
+<pre><code>Cognitive Intent:
+    PICK_UP_OBJECT
+
+Reaction:
+    trajectory available
+
+Safety:
+    human hand detected in unsafe region</code></pre>
+<p>最终：</p>
+<pre><code>BLOCK ACTION</code></pre>
+<p>原则：</p>
+<pre><code>Safety
+   &gt;
+Reaction
+   &gt;
+Cognitive Action</code></pre>
+<p>这里的 <code>&gt;</code> 表示执行约束优先级，而不是认知重要性。</p>
+<hr>
+<h2 id="section-7">7. Reaction Path</h2>
+<p>Reaction Path 负责：</p>
+<pre><code>fast
+predictable
+low-latency
+well-learned</code></pre>
+<p>的行为。</p>
+<p>典型任务：</p>
+<pre><code>balance
+
+collision avoidance
+
+grasp correction
+
+object tracking
+
+trajectory following
+
+slip recovery
+
+basic manipulation
+
+reflex behavior</code></pre>
+<p>可能使用：</p>
+<pre><code>Controller
+
+MPC
+
+Policy
+
+VLA
+
+World Action Model
+
+Recovery Model</code></pre>
+<p>典型时间尺度：</p>
+<pre><code>1 ms ~ 200 ms</code></pre>
+<p>Reaction Path 不等待 Cognitive Path。</p>
+<hr>
+<h2 id="section-8">8. Cognitive Path</h2>
+<p>Cognitive Path 负责：</p>
+<pre><code>ambiguous situations
+
+goal conflicts
+
+social reasoning
+
+long-term consequences
+
+novel problems
+
+strategy
+
+planning
+
+uncertainty
+
+complex decisions</code></pre>
+<p>典型输入：</p>
+<pre><code>Situation
++
+Goal
++
+Role
++
+Mission
++
+Memory
++
+History
++
+Available Actions</code></pre>
+<p>输出：</p>
+<pre><code>Intent</code></pre>
+<p>而不是：</p>
+<pre><code>Motor Command</code></pre>
+<hr>
+<h2 id="section-9">9. Dual-Path Intelligence</h2>
+<p>Reaction Path 与 Cognitive Path 必须同时存在。</p>
+<p>例如机器人正在：</p>
+<pre><code>Goal:
+给老人倒水</code></pre>
+<p>Cognitive Path：</p>
+<pre><code>Intent:
+POUR_WATER</code></pre>
+<p>Action Layer 开始：</p>
+<pre><code>REACH
+ ↓
+GRASP
+ ↓
+LIFT
+ ↓
+POUR</code></pre>
+<p>突然：</p>
+<pre><code>cup moved</code></pre>
+<p>Reaction Path：</p>
+<pre><code>collision risk
+     ↓
+STOP POURING</code></pre>
+<p>无需等待 Cognitive Path。</p>
+<p>随后：</p>
+<pre><code>ReactionReport:
+
+POUR_INTERRUPTED
+
+reason:
+target moved</code></pre>
+<p>进入 Semantic Path：</p>
+<pre><code>Event
+ ↓
+Situation Update
+ ↓
+Cognition</code></pre>
+<p>Cognitive Path：</p>
+<pre><code>Goal remains:
+给老人倒水
+
+New Intent:
+RELOCATE_CUP</code></pre>
+<p>形成：</p>
+<pre><code>Cognition
+   ↓
+Action
+   ↓
+Reaction Interrupt
+   ↓
+Situation Update
+   ↓
+Cognition Replan
+   ↓
+Action</code></pre>
+<hr>
+<h2 id="section-10">10. World Model</h2>
+<p>World Model 是整个系统的中心共享状态。</p>
+<p>它不是 LLM Prompt。</p>
+<p>它是机器人当前认为：</p>
+<blockquote><p>世界是什么样子的。</p></blockquote>
+<p>例如：</p>
+<pre><code>World
+│
+├── Entities
+│   │
+│   ├── person_1
+│   ├── person_2
+│   ├── robot
+│   ├── cup_1
+│   └── table_1
+│
+├── State
+│
+├── Relations
+│   │
+│   ├── person_1 near robot
+│   ├── cup_1 on table
+│   └── person_2 holding phone
+│
+├── Environment
+│
+├── Robot State
+│
+└── Domain State</code></pre>
+<p>不同 Path 可以读取 World Model 的不同部分。</p>
+<hr>
+<h2 id="section-11">11. Temporal Semantic Path</h2>
+<p>World Model 可能以：</p>
+<pre><code>1 Hz
+~
+30 Hz
+~
+200 Hz</code></pre>
+<p>不断更新。</p>
+<p>这些信息不能直接发送给 LLM。</p>
+<p>因此：</p>
+<pre><code>World State
+    ↓
+State Differ
+    ↓
+ΔWorld
+    ↓
+Change Filter
+    ↓
+Temporal Detector
+    ↓
+Event
+    ↓
+Event Correlator
+    ↓
+Episode</code></pre>
+<p>其核心作用：</p>
+<blockquote><p>将连续世界压缩成具有认知意义的“事情”。</p></blockquote>
+<hr>
+<h2 id="section-12">12. ΔWorld</h2>
+<p>系统不重复描述：</p>
+<pre><code>世界现在是什么。</code></pre>
+<p>而优先描述：</p>
+<pre><code>世界发生了什么变化。</code></pre>
+<p>例如：</p>
+<pre><code>gaze:
+
+elsewhere
+    ↓
+robot</code></pre>
+<p>产生：</p>
+<pre><code>GAZE_TARGET_CHANGED</code></pre>
+<p>关系：</p>
+<pre><code>cup ON table
+      ↓
+cup HELD_BY person</code></pre>
+<p>产生：</p>
+<pre><code>RelationRemoved:
+    cup ON table
+
+RelationAdded:
+    person HOLDS cup</code></pre>
+<p>这比持续发送物体 XYZ 坐标具有更高的信息价值。</p>
+<hr>
+<h2 id="section-13">13. Event</h2>
+<p>ΔWorld 不直接等于 Event。</p>
+<p>例如：</p>
+<pre><code>eye openness:
+
+0.8 → 0.1</code></pre>
+<p>不意味着：</p>
+<pre><code>BLINK</code></pre>
+<p>Blink 是：</p>
+<pre><code>OPEN
+ ↓
+CLOSED
+ ↓
+OPEN</code></pre>
+<p>在一定时间范围内形成的 Temporal Pattern。</p>
+<p>因此：</p>
+<pre><code>ΔWorld
+   ↓
+Temporal Detector
+   ↓
+Event</code></pre>
+<p>Event 是：</p>
+<blockquote><p>世界变化在时间维度上形成的有意义模式。</p></blockquote>
+<hr>
+<h2 id="section-14">14. Episode</h2>
+<p>多个 Event 可能属于同一个行为过程。</p>
+<p>例如：</p>
+<pre><code>LOOK_AT_ROBOT
+
+MOUTH_CORNERS_RAISED
+
+SPEECH(&quot;你好&quot;)
+
+HAND_WAVE</code></pre>
+<p>通过：</p>
+<pre><code>subject
+
+target
+
+temporal proximity
+
+spatial proximity
+
+semantic relation</code></pre>
+<p>形成：</p>
+<pre><code>Episode</code></pre>
+<p>Episode 表达：</p>
+<blockquote><p>一组彼此相关的事情正在/已经发生。</p></blockquote>
+<hr>
+<h2 id="section-15">15. Evidence Chain</h2>
+<p>Semantic Compression 不能彻底丢弃底层证据。</p>
+<p>保持：</p>
+<pre><code>Situation
+    ↓
+Episode
+    ↓
+Event
+    ↓
+ΔWorld
+    ↓
+Observation
+    ↓
+Sensor Sample</code></pre>
+<p>因此机器人可以：</p>
+<pre><code>trace
+
+debug
+
+replay
+
+reinterpret
+
+inspect evidence</code></pre>
+<p>而不是只有一个不可解释的最终分类结果。</p>
+<hr>
+<h2 id="section-16">16. Situation Model</h2>
+<p>Situation 是 v2.0 的核心新增概念。</p>
+<p>Episode 回答：</p>
+<blockquote><p>发生了什么？</p></blockquote>
+<p>Situation 回答：</p>
+<blockquote><p>这些事情在当前上下文中意味着什么？</p></blockquote>
+<p>Situation 可以融合：</p>
+<pre><code>Current World State
+
+Recent Episodes
+
+Domain State
+
+People
+
+Relationships
+
+Interaction History
+
+Current Task
+
+Current Environment
+
+Uncertainty
+
+Relevant Memory</code></pre>
+<p>例如：</p>
+<pre><code>Situation {
+
+    activity:
+        recreational_mahjong
+
+    participants:
+        robot
+        elderly_person_1
+        elderly_person_2
+        elderly_person_3
+        elderly_person_4
+
+    game_state:
+        upper_player discarded 8筒
+
+    available_actions:
+        HU
+        PASS
+
+    game_analysis:
+        HU is legal
+
+    social_observation:
+        opposite_player:
+            eyes narrowed
+            mouth corners raised
+
+    social_interpretation:
+        possible positive affect
+
+    confidence:
+        0.72
+}</code></pre>
+<p>Situation 不直接决定 Action。</p>
+<hr>
+<h2 id="section-17">17. Domain Semantic Engines</h2>
+<p>不同任务可以加载不同 Temporal Semantic Engine。</p>
+<p>例如：</p>
+<pre><code>Human Social Engine
+
+Pet Interaction Engine
+
+Mahjong Engine
+
+Desktop Engine
+
+Navigation Engine</code></pre>
+<p>共享：</p>
+<pre><code>World Model</code></pre>
+<p>但关注不同的：</p>
+<pre><code>Feature
+
+ΔWorld
+
+Temporal Pattern
+
+Event
+
+Episode</code></pre>
+<p>例如：</p>
+<pre><code>                    World State
+                         │
+          ┌──────────────┼──────────────┐
+          ▼              ▼              ▼
+       Social         Mahjong        Desktop
+       Engine          Engine         Engine
+          │              │              │
+          └──────────────┼──────────────┘
+                         ▼
+                     Situation</code></pre>
+<hr>
+<h2 id="section-18">18. Agent Runtime</h2>
+<p>Agent Runtime 位于：</p>
+<pre><code>Situation</code></pre>
+<p>和：</p>
+<pre><code>Cognition</code></pre>
+<p>之间。</p>
+<p>主要负责：</p>
+<pre><code>Attention
+
+Goal Management
+
+Role
+
+Mission
+
+Memory Retrieval
+
+Decision Routing
+
+Cognitive Escalation
+
+Intent Lifecycle</code></pre>
+<p>它决定：</p>
+<blockquote><p>当前情况是否值得“思考”。</p></blockquote>
+<hr>
+<h2 id="section-19">19. Goal Manager</h2>
+<p>Goal 是 v2.0 中的一等运行时对象。</p>
+<p>Goal 不应该仅存在于：</p>
+<pre><code>LLM Prompt</code></pre>
+<p>而应该属于 Agent Runtime State。</p>
+<p>例如：</p>
+<pre><code>Goal {
+    id
+
+    source
+
+    scope
+
+    priority
+
+    objective
+
+    constraints
+
+    start_time
+
+    expiration
+
+    status
+}</code></pre>
+<p>Goal 来源可能包括：</p>
+<pre><code>System
+
+Mission
+
+User
+
+Agent
+
+Domain
+
+Temporary Situation</code></pre>
+<hr>
+<h2 id="section-20">20. Goal Hierarchy</h2>
+<p>Goal 可以形成层级：</p>
+<pre><code>Mission
+   ↓
+Session Goal
+   ↓
+Temporary Goal
+   ↓
+Subgoal
+   ↓
+Intent</code></pre>
+<p>例如：</p>
+<pre><code>Mission:
+Companion Robot
+
+        ↓
+
+Session Goal:
+陪老人打麻将
+
+        ↓
+
+Primary Goal:
+让参与者享受社交过程
+
+        ↓
+
+Temporary Goal:
+决定当前是否胡牌
+
+        ↓
+
+Intent:
+PASS</code></pre>
+<p>底层模型无需重新训练。</p>
+<p>改变：</p>
+<pre><code>Goal</code></pre>
+<p>即可改变机器人行为策略。</p>
+<hr>
+<h2 id="section-21">21. Goal Stack</h2>
+<p>Goal Manager 应支持：</p>
+<pre><code>push
+
+pop
+
+suspend
+
+resume
+
+complete
+
+cancel
+
+expire
+
+override</code></pre>
+<p>例如：</p>
+<pre><code>PLAY_MAHJONG</code></pre>
+<p>过程中检测到：</p>
+<pre><code>POSTURAL_INSTABILITY(person_2)</code></pre>
+<p>Attention 提高。</p>
+<p>Goal Manager：</p>
+<pre><code>┌─────────────────────────────┐
+│ CHECK_PERSON_SAFETY         │ ← ACTIVE
+├─────────────────────────────┤
+│ PLAY_MAHJONG                │ ← SUSPENDED
+├─────────────────────────────┤
+│ COMPANIONSHIP               │
+└─────────────────────────────┘</code></pre>
+<p>确认安全后：</p>
+<pre><code>CHECK_PERSON_SAFETY
+        ↓
+COMPLETE
+        ↓
+pop
+        ↓
+PLAY_MAHJONG
+        ↓
+resume</code></pre>
+<p>这类似：</p>
+<pre><code>Cognitive Interrupt</code></pre>
+<hr>
+<h2 id="section-22">22. Attention</h2>
+<p>Attention 判断：</p>
+<blockquote><p>什么值得进入更高层 Cognition？</p></blockquote>
+<p>可以考虑：</p>
+<pre><code>Information Value
+    =
+Novelty
+×
+Relevance
+×
+Confidence
+×
+Urgency</code></pre>
+<p>例如：</p>
+<pre><code>person sitting
+→
+person sitting</code></pre>
+<p>几乎不需要认知资源。</p>
+<p>而：</p>
+<pre><code>person standing
+→
+person suddenly falling</code></pre>
+<p>应该立即提升。</p>
+<p>Attention 的目标不是减少数据本身，而是：</p>
+<blockquote><p>管理有限的认知资源。</p></blockquote>
+<hr>
+<h2 id="section-23">23. Cognitive Escalation</h2>
+<p>不是所有问题都调用 LLM。</p>
+<p>基本流程：</p>
+<pre><code>Event / Situation
+       ↓
+Can local system handle it?
+       │
+      YES
+       ↓
+Reaction / Rule / Small Model
+       │
+      END
+
+       NO
+       ↓
+Does it involve:
+- ambiguity?
+- goal conflict?
+- novelty?
+- long-term consequence?
+- social reasoning?
+- planning?
+       │
+      YES
+       ↓
+Escalate
+       ↓
+Reasoning Model / LLM</code></pre>
+<p>例如：</p>
+<pre><code>GRASP_SLIP
+     ↓
+Reaction Policy
+     ↓
+correct grip</code></pre>
+<p>不需要 LLM。</p>
+<p>但：</p>
+<pre><code>GRASP_SLIP
+ ↓
+GRASP_SLIP
+ ↓
+GRASP_SLIP</code></pre>
+<p>形成：</p>
+<pre><code>Episode:
+REPEATED_GRASP_FAILURE</code></pre>
+<p>升级：</p>
+<pre><code>Cognition:
+
+possible cause:
+object is unusually slippery
+
+Intent:
+CHANGE_GRASP_STRATEGY</code></pre>
+<hr>
+<h2 id="section-24">24. Uncertainty</h2>
+<p>Cognitive Runtime 必须允许：</p>
+<pre><code>UNKNOWN</code></pre>
+<p>而不是强迫系统永远给出分类结果。</p>
+<p>例如：</p>
+<pre><code>Hypothesis A:
+person is enjoying the game
+confidence = 0.46
+
+Hypothesis B:
+person reacted to another participant
+confidence = 0.31
+
+Unknown:
+0.23</code></pre>
+<p>Agent 可以：</p>
+<pre><code>WAIT</code></pre>
+<p>或者：</p>
+<pre><code>OBSERVE_MORE</code></pre>
+<p>甚至主动：</p>
+<pre><code>look toward person
+
+listen
+
+inspect gaze
+
+ask question</code></pre>
+<p>因此：</p>
+<blockquote><p>暂时不行动，先获得更多信息，本身也是一种智能行为。</p></blockquote>
+<hr>
+<h2 id="section-25">25. Active Perception</h2>
+<p>因此感知不应该永远是被动的。</p>
+<p>可以形成：</p>
+<pre><code>Perception
+    ↓
+Hypothesis
+    ↓
+Uncertainty
+    ↓
+Information Need
+    ↓
+Active Observation
+    ↓
+New Evidence
+    ↓
+Updated Situation</code></pre>
+<p>例如：</p>
+<pre><code>“不确定老人为什么笑”</code></pre>
+<p>Agent 可以选择：</p>
+<pre><code>观察 gaze target</code></pre>
+<p>而不是立刻改变游戏行为。</p>
+<hr>
+<h2 id="section-26">26. Deliberative Cognition</h2>
+<p>真正复杂的问题进入：</p>
+<pre><code>Reasoning Model / LLM</code></pre>
+<p>输入：</p>
+<pre><code>Situation
+
+Goal
+
+Role
+
+Mission
+
+Relevant Memory
+
+History
+
+Available Actions
+
+Constraints
+
+Uncertainty</code></pre>
+<p>LLM 负责：</p>
+<pre><code>interpretation
+
+hypothesis
+
+trade-off
+
+planning
+
+strategy
+
+counterfactual reasoning</code></pre>
+<p>最终输出：</p>
+<pre><code>Intent</code></pre>
+<hr>
+<h2 id="section-27">27. Mahjong 示例</h2>
+<p>当前：</p>
+<pre><code>上家打出 8筒</code></pre>
+<p>Mahjong Engine：</p>
+<pre><code>Legal Actions:
+
+HU
+PASS</code></pre>
+<p>同时 Social Engine：</p>
+<pre><code>opposite_player:
+
+eye aperture decreased
+mouth corners raised</code></pre>
+<p>Interpretation：</p>
+<pre><code>possible positive expression
+confidence = 0.72</code></pre>
+<p>Situation：</p>
+<pre><code>Current activity:
+recreational mahjong
+
+Current role:
+companion
+
+Primary Goal:
+maintain enjoyable interaction
+
+Game State:
+HU available
+
+Social Context:
+possible anticipation / enjoyment</code></pre>
+<p>Cognitive Path 需要考虑：</p>
+<pre><code>winning
+
+fairness
+
+social enjoyment
+
+interaction history
+
+whether intentional concession
+would be noticeable
+
+long-term interaction quality</code></pre>
+<p>最后才产生：</p>
+<pre><code>Intent:
+PASS</code></pre>
+<p>这里：</p>
+<pre><code>Can HU</code></pre>
+<p>与：</p>
+<pre><code>Should HU</code></pre>
+<p>属于完全不同的层。</p>
+<hr>
+<h2 id="section-28">28. Intent</h2>
+<p>Intent 是 Cognitive Layer 和 Action Layer 的边界。</p>
+<p>LLM 不应该输出：</p>
+<pre><code>servo angle
+
+joint trajectory
+
+motor torque</code></pre>
+<p>而应该输出：</p>
+<pre><code>Intent {
+    type:
+        PASS_CURRENT_WINNING_OPPORTUNITY
+
+    objective:
+        preserve enjoyable interaction
+
+    constraints:
+        continue natural participation
+        avoid obvious intentional loss
+}</code></pre>
+<p>Action Layer 再负责：</p>
+<pre><code>How?</code></pre>
+<hr>
+<h2 id="section-29">29. Intent 与 Action 分离</h2>
+<p>同一个 Intent：</p>
+<pre><code>COMFORT_PERSON</code></pre>
+<p>可能根据：</p>
+<pre><code>person preference
+
+distance
+
+social context
+
+robot embodiment</code></pre>
+<p>转换为不同 Action。</p>
+<p>例如：</p>
+<pre><code>Speech
+
+Gesture
+
+Approach
+
+Remain Nearby</code></pre>
+<p>因此：</p>
+<pre><code>Goal
+ ↓
+Intent
+ ↓
+Strategy
+ ↓
+Skill
+ ↓
+Action
+ ↓
+Trajectory
+ ↓
+Motor Command</code></pre>
+<p>自由度逐层下降。</p>
+<p>原则：</p>
+<blockquote><p>高层保持开放，低层逐渐确定。</p></blockquote>
+<hr>
+<h2 id="section-30">30. Action Layer</h2>
+<p>Action Layer 负责：</p>
+<pre><code>Skill
+
+VLA
+
+Policy
+
+World Action Model
+
+Motion Planning
+
+Recovery
+
+Controller</code></pre>
+<p>它解决：</p>
+<blockquote><p>已经知道想做什么以后，怎样可靠地做到。</p></blockquote>
+<p>而不是：</p>
+<blockquote><p>为什么要这么做。</p></blockquote>
+<p>因此类似：</p>
+<pre><code>WALL-WM
+
+SAILOR
+
+VLA
+
+Diffusion Policy</code></pre>
+<p>等技术主要属于这一层及 Reaction/Recovery 范围。</p>
+<hr>
+<h2 id="section-31">31. Action Arbitration</h2>
+<p>由于：</p>
+<pre><code>Safety
+
+Reaction
+
+Cognitive Intent
+
+Current Skill</code></pre>
+<p>可能同时产生控制要求，因此必须存在：</p>
+<pre><code>Action Arbitration</code></pre>
+<p>输入：</p>
+<pre><code>Safety Constraints
+
+Reaction Requests
+
+Cognitive Intent
+
+Current Skill State
+
+Physical Constraints</code></pre>
+<p>输出：</p>
+<pre><code>Executable Action</code></pre>
+<p>例如：</p>
+<pre><code>Cognitive:
+continue pouring
+
+Reaction:
+target moved
+
+Safety:
+collision risk</code></pre>
+<p>最终：</p>
+<pre><code>STOP</code></pre>
+<p>随后将中断结果报告给 Cognitive Path。</p>
+<hr>
+<h2 id="section-32">32. Reaction Report</h2>
+<p>Reaction Path 不只是执行。</p>
+<p>它还应该报告：</p>
+<pre><code>ReactionReport {
+    event
+
+    action_taken
+
+    result
+
+    confidence
+
+    timestamp
+}</code></pre>
+<p>例如：</p>
+<pre><code>event:
+GRASP_SLIP
+
+action_taken:
+GRIP_CORRECTION
+
+result:
+RECOVERED</code></pre>
+<p>如果成功：</p>
+<pre><code>continue</code></pre>
+<p>如果连续失败：</p>
+<pre><code>Temporal Semantic Engine
+        ↓
+REPEATED_GRASP_FAILURE
+        ↓
+Cognitive Escalation</code></pre>
+<hr>
+<h2 id="section-33">33. Cognitive → Reaction</h2>
+<p>Cognitive Path 不需要控制每个运动细节。</p>
+<p>它可以通过：</p>
+<pre><code>Intent
+
+Constraint
+
+Action Envelope
+
+Behavior Mode</code></pre>
+<p>改变 Reaction Path。</p>
+<p>例如：</p>
+<pre><code>Context:
+elderly interaction
+
+Intent:
+hand object to person
+
+Constraints:
+
+max_speed:
+low
+
+contact_force:
+gentle
+
+personal_space:
+conservative</code></pre>
+<p>底层 Policy 仍然自主完成动作。</p>
+<hr>
+<h2 id="section-34">34. 多时间尺度智能</h2>
+<p>整个系统可以理解为：</p>
+<pre><code>Motor Control
+&lt;10 ms
+
+Reflex / Safety
+10~50 ms
+
+Reaction Policy
+20~200 ms
+
+Temporal Semantic
+50 ms ~ seconds
+
+Situation / Agent
+100 ms ~ seconds
+
+Deliberation
+500 ms ~ tens of seconds
+
+Long-term Cognition
+minutes ~ months</code></pre>
+<p>因此判断一个功能应该放在哪里，可以问：</p>
+<blockquote><p>这个问题允许机器人思考多久？</p></blockquote>
+<hr>
+<h2 id="section-35">35. Cognition 不阻塞 Real-time Control</h2>
+<p>当 LLM 思考：</p>
+<pre><code>1~3 seconds</code></pre>
+<p>底层仍然：</p>
+<pre><code>maintain balance
+
+track people
+
+avoid collision
+
+continue safe motion
+
+listen
+
+update World State
+
+handle reflexes</code></pre>
+<p>因此：</p>
+<pre><code>Cognition
+≠
+Real-time Control</code></pre>
+<p>必须彻底分离。</p>
+<hr>
+<h2 id="section-36">36. 两种学习</h2>
+<p>v2.0 也区分两种不同意义上的 Learning。</p>
+<h3 id="detail-1870">Reaction Learning</h3>
+<p>学习：</p>
+<pre><code>how to grasp
+
+how to walk
+
+how to manipulate
+
+how to recover
+
+how to control</code></pre>
+<p>可能使用：</p>
+<pre><code>Imitation Learning
+
+Reinforcement Learning
+
+World Model
+
+VLA
+
+Fine-tuning</code></pre>
+<hr>
+<h3 id="detail-1902">Cognitive Learning</h3>
+<p>学习：</p>
+<pre><code>what this person prefers
+
+what happened before
+
+why something failed
+
+which strategy worked
+
+how relationships evolve
+
+what situations usually mean</code></pre>
+<p>主要依赖：</p>
+<pre><code>Episode Memory
+
+Semantic Memory
+
+Interaction History
+
+Preference Model
+
+Reflection
+
+Strategy Memory</code></pre>
+<p>因此：</p>
+<blockquote><p>机器人学习不等于模型参数不断更新。</p></blockquote>
+<hr>
+<h2 id="section-37">37. Memory Architecture</h2>
+<p>建议至少区分：</p>
+<pre><code>Working Memory
+
+Event Memory
+
+Episode Memory
+
+Semantic Memory
+
+Person Memory
+
+Skill Memory
+
+Strategy Memory</code></pre>
+<p>例如：</p>
+<pre><code>Experience
+   ↓
+Episode
+   ↓
+Reflection
+   ↓
+Memory
+   ↓
+Future Situation
+   ↓
+Retrieve
+   ↓
+Better Decision</code></pre>
+<p>机器人可以在不 Fine-tuning 的情况下持续变得更适应环境和用户。</p>
+<hr>
+<h2 id="section-38">38. Domain 与 Cognition 的边界</h2>
+<p>Domain Engine 不应该过度智能化。</p>
+<p>例如观察：</p>
+<pre><code>eye aperture decreased
+
+mouth corners raised</code></pre>
+<p>可以生成：</p>
+<pre><code>possible positive facial expression
+confidence = 0.72</code></pre>
+<p>但不应该直接：</p>
+<pre><code>person wants robot to PASS</code></pre>
+<p>后者依赖：</p>
+<pre><code>Situation
+
+Goal
+
+History
+
+Game State
+
+Social Context</code></pre>
+<p>必须由更高层 Cognition 判断。</p>
+<p>核心原则：</p>
+<blockquote><p>Semantic Event 不绑定 Action。</p></blockquote>
+<hr>
+<h2 id="section-39">39. Event 与 Action 解耦</h2>
+<p>禁止形成：</p>
+<pre><code>Event
+ ↓
+Fixed Action</code></pre>
+<p>除非它明确属于：</p>
+<pre><code>Safety
+
+Reflex
+
+Real-time Control</code></pre>
+<p>正常认知路径应该：</p>
+<pre><code>Event
+ ↓
+Episode
+ ↓
+Situation
+ ↓
+Goal
+ ↓
+Hypothesis
+ ↓
+Deliberation
+ ↓
+Intent
+ ↓
+Action</code></pre>
+<p>因此相同 Event 在不同 Situation 中可以产生完全不同的行为。</p>
+<hr>
+<h2 id="section-40">40. Runtime 核心模块</h2>
+<p>建议的软件结构：</p>
+<pre><code>temporal-semantic-runtime/
+│
+├── perception/
+│   ├── adapters/
+│   └── observation/
+│
+├── world/
+│   ├── entity/
+│   ├── state/
+│   ├── relation/
+│   └── timeline/
+│
+├── semantic/
+│   ├── delta/
+│   ├── event/
+│   ├── episode/
+│   ├── evidence/
+│   └── situation/
+│
+├── domains/
+│   ├── human_social/
+│   ├── pet/
+│   ├── mahjong/
+│   ├── desktop/
+│   └── navigation/
+│
+├── agent/
+│   ├── attention/
+│   ├── goal_manager/
+│   ├── role/
+│   ├── mission/
+│   ├── decision_router/
+│   └── escalation/
+│
+├── cognition/
+│   ├── context_builder/
+│   ├── reasoning/
+│   ├── planning/
+│   ├── reflection/
+│   └── memory/
+│
+├── reaction/
+│   ├── policies/
+│   ├── recovery/
+│   └── reaction_report/
+│
+├── safety/
+│   ├── constraints/
+│   └── supervisor/
+│
+├── action/
+│   ├── intent/
+│   ├── arbitration/
+│   ├── skill/
+│   ├── planner/
+│   └── controller/
+│
+└── runtime/
+    ├── scheduler/
+    ├── lifecycle/
+    ├── registry/
+    └── diagnostics/</code></pre>
+<hr>
+<h2 id="section-41">41. Runtime 核心接口</h2>
+<p>v2.0 应优先冻结以下接口：</p>
+<pre><code>Perception
+    →
+Observation</code></pre>
+<pre><code>Observation
+    →
+WorldState</code></pre>
+<pre><code>WorldState
+    →
+WorldDelta</code></pre>
+<pre><code>WorldDelta
+    →
+Event</code></pre>
+<pre><code>Event
+    →
+Episode</code></pre>
+<pre><code>Episode + WorldState + Memory
+    →
+Situation</code></pre>
+<pre><code>Situation + Goal
+    →
+Decision Route</code></pre>
+<pre><code>Situation + Goal + Memory
+    →
+Intent</code></pre>
+<pre><code>Intent
+    →
+Skill</code></pre>
+<p>以及最关键的：</p>
+<pre><code>Safety
++
+Reaction
++
+Intent
++
+Current Action
+    ↓
+Action Arbitration
+    ↓
+Executable Action</code></pre>
+<hr>
+<h2 id="section-42">42. v2.0 的核心闭环</h2>
+<p>最终整个系统形成：</p>
+<pre><code>                         WORLD
+                           │
+                           ▼
+                      PERCEPTION
+                           │
+                           ▼
+                     WORLD MODEL
+                           │
+             ┌─────────────┼─────────────┐
+             │             │             │
+             ▼             ▼             ▼
+          SAFETY        REACTION      ΔWORLD
+             │             │             │
+             │             │           EVENT
+             │             │             │
+             │             │          EPISODE
+             │             │             │
+             │             │         SITUATION
+             │             │             │
+             │             │         ATTENTION
+             │             │             │
+             │             │           GOAL
+             │             │             │
+             │             │         COGNITION
+             │             │             │
+             │             │           INTENT
+             │             │             │
+             └─────────────┼─────────────┘
+                           │
+                           ▼
+                  ACTION ARBITRATION
+                           │
+                           ▼
+                         SKILL
+                           │
+                           ▼
+                        POLICY
+                           │
+                           ▼
+                      CONTROLLER
+                           │
+                           ▼
+                         WORLD</code></pre>
+<hr>
+<h2 id="section-43">43. v2.0 的核心原则</h2>
+<p>Temporal Semantic Runtime v2.0 可以总结为以下原则：</p>
+<h3 id="detail-2278">Principle 1</h3>
+<p><strong>World Model ≠ LLM Context</strong></p>
+<p>世界状态可以很大，LLM Context 必须稀疏且相关。</p>
+<h3 id="detail-2284">Principle 2</h3>
+<p><strong>Semantic Event ≠ Action</strong></p>
+<p>观察到什么，不等于应该做什么。</p>
+<h3 id="detail-2290">Principle 3</h3>
+<p><strong>Goal is Runtime State</strong></p>
+<p>Goal 是 Agent Runtime 的动态状态，而不是模型固有能力。</p>
+<h3 id="detail-2296">Principle 4</h3>
+<p><strong>Reaction ≠ Cognition</strong></p>
+<p>快速反应和复杂思考属于不同路径。</p>
+<h3 id="detail-2302">Principle 5</h3>
+<p><strong>Cognition must not block control</strong></p>
+<p>LLM 思考时，机器人仍然能够安全运行。</p>
+<h3 id="detail-2308">Principle 6</h3>
+<p><strong>Intent ≠ Motor Command</strong></p>
+<p>认知层决定“想做什么”，Action Layer 决定“怎么做”。</p>
+<h3 id="detail-2314">Principle 7</h3>
+<p><strong>Uncertainty is valid</strong></p>
+<p>“不知道”是合法状态。</p>
+<h3 id="detail-2320">Principle 8</h3>
+<p><strong>Observation can be an Action</strong></p>
+<p>主动观察、等待、询问都可以是决策。</p>
+<h3 id="detail-2326">Principle 9</h3>
+<p><strong>Learning ≠ Fine-tuning</strong></p>
+<p>Memory、Episode、Preference 和 Strategy 的积累同样属于学习。</p>
+<h3 id="detail-2332">Principle 10</h3>
+<p><strong>Safety is outside general reasoning</strong></p>
+<p>Safety 不依赖通用 LLM 的即时判断。</p>
+<hr>
+<h2 id="section-44">44. 项目的最终定位</h2>
+<p>Temporal Semantic Runtime v2.0 不是：</p>
+<pre><code>Robot Controller</code></pre>
+<p>不是：</p>
+<pre><code>VLA Model</code></pre>
+<p>不是：</p>
+<pre><code>LLM Agent Wrapper</code></pre>
+<p>也不是：</p>
+<pre><code>ROS Replacement</code></pre>
+<p>它是位于：</p>
+<pre><code>Perception / World Model</code></pre>
+<p>与：</p>
+<pre><code>Reasoning / Action</code></pre>
+<p>之间的：</p>
+<blockquote><p><strong>Embodied Agent Runtime</strong></p></blockquote>
+<p>它负责协调：</p>
+<pre><code>Reality
+
+Time
+
+State
+
+Change
+
+Event
+
+Episode
+
+Situation
+
+Attention
+
+Goal
+
+Memory
+
+Reaction
+
+Cognition
+
+Intent
+
+Action</code></pre>
+<hr>
+<h2 id="section-45">45. 最终设计思想</h2>
+<p>传统 Reaction-oriented Robot：</p>
+<pre><code>See
+ ↓
+Predict
+ ↓
+Act</code></pre>
+<p>Temporal Semantic Runtime v2.0：</p>
+<pre><code>See
+ ↓
+Understand Change
+ ↓
+Recognize Events
+ ↓
+Build Situation
+ ↓
+Remember
+ ↓
+Know Current Goal
+ ↓
+Decide Whether Thinking Is Needed
+ ↓
+Think When Necessary
+ ↓
+Form Intent
+ ↓
+Act
+ ↓
+Observe Consequences
+ ↓
+Learn From Experience</code></pre>
+<p>与此同时另一条路径始终存在：</p>
+<pre><code>See
+ ↓
+React
+ ↓
+Stay Safe / Stable / Responsive</code></pre>
+<p>因此最终形成：</p>
+<pre><code>                ┌── Reaction ──┐
+Reality → World │              ├→ Action → Reality
+                └─ Cognition ──┘</code></pre>
+<p>这就是 Temporal Semantic Runtime v2.0 最重要的架构思想：</p>
+<blockquote><p><strong>Reaction Path 与 Cognitive Path 同时存在。</strong></p></blockquote>
+<p>机器人既能够在几十毫秒内做出必要反应，又能够在数秒甚至更长时间尺度上理解 Situation、考虑 Goal、回忆过去、处理不确定性、比较不同选择并形成新的 Intent。</p>
+<p>最终目标不是构建一个：</p>
+<blockquote><p><strong>只会对世界作出反应的机器。</strong></p></blockquote>
+<p>而是构建一个：</p>
+<blockquote><p><strong>能够观察世界、理解正在发生什么、知道自己当前为什么而行动，并在必要的时候停下来思考“我应该做什么”的机器。</strong></p></blockquote></div>
+  </article></main>
+  <footer><a href="index.html">返回 Blog</a><a href="#top">回到顶部 ↑</a><span>sukimiya's workshop</span></footer>
+</body>
+</html>

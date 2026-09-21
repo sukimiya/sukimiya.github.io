@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BLOG = ROOT / "blog"
 NEW_ARTICLE = BLOG / "temporal-semantic-runtime.html"
+V2_ARTICLE = BLOG / "temporal-semantic-runtime-v2.html"
 
 
 class PageParser(HTMLParser):
@@ -43,9 +44,11 @@ def resolve_local(page: Path, ref: str) -> Path | None:
 
 def main() -> None:
     assert NEW_ARTICLE.exists(), "missing Temporal Semantic Runtime article"
+    assert V2_ARTICLE.exists(), "missing Temporal Semantic Runtime v2.0 article"
 
     index = parse(BLOG / "index.html")
     assert "temporal-semantic-runtime.html" in index.links, "Blog index has no link to the new article"
+    assert "temporal-semantic-runtime-v2.html" in index.links, "Blog index has no link to the v2.0 article"
 
     pages = list(BLOG.glob("*.html"))
     for page in pages:
@@ -59,6 +62,10 @@ def main() -> None:
     article = NEW_ARTICLE.read_text(encoding="utf-8")
     for heading in ("World State", "ΔWorld", "Evidence Chain", "最终架构思想"):
         assert heading in article, f"article is missing core section: {heading}"
+
+    v2_article = V2_ARTICLE.read_text(encoding="utf-8")
+    for heading in ("Reaction Path", "Cognitive Path", "Action Arbitration", "Safety Path"):
+        assert heading in v2_article, f"v2.0 article is missing core section: {heading}"
 
     print(f"Verified {len(pages)} Blog pages and all local references.")
 
