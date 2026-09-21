@@ -1,0 +1,1006 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="一种以语义世界模型、时间变化、事件与 Episode 为核心的本地多模态架构，只把真正值得认知的信息交给 LLM。">
+  <title>Temporal Semantic Runtime | sukimiya's workshop</title>
+  <link rel="stylesheet" href="blog.css">
+</head>
+<body id="top">
+  <a class="skip-link" href="#main">跳到正文</a>
+  <header class="site-header"><nav aria-label="主导航">
+    <a class="brand" href="../index.html"><img src="../img/logo2.svg" width="30" height="30" alt="">sukimiya's workshop</a>
+    <div class="nav-links"><a href="../index.html">首页</a><a href="index.html" aria-current="true">Blog</a><a href="https://github.com/sukimiya">GitHub</a></div>
+  </nav></header>
+  <main id="main"><article>
+    <header class="article-header"><a class="eyebrow" href="index.html">BLOG / AI · 具身智能</a><h1>Temporal Semantic Runtime</h1><p class="article-deck">面向个人与小团队的本地多模态 / 具身智能架构</p></header>
+    <details class="toc"><summary>文章目录</summary><ol><li><a href="#section-1">1. 背景</a></li><li><a href="#section-2">2. 核心设计原则</a></li><li><a href="#section-3">3. 系统总体架构</a></li><li><a href="#section-4">4. Observation IR</a></li><li><a href="#section-5">5. World State</a></li><li><a href="#section-6">6. ΔWorld</a></li><li><a href="#section-7">7. Event</a></li><li><a href="#section-8">8. Episode</a></li><li><a href="#section-9">9. Episode 生命周期</a></li><li><a href="#section-10">10. Temporal Semantic Compression</a></li><li><a href="#section-11">11. Attention</a></li><li><a href="#section-12">12. Push + Pull Cognitive Interface</a></li><li><a href="#section-13">13. Evidence Chain</a></li><li><a href="#section-14">14. Domain Semantic Engine</a></li><li><a href="#section-15">15. Human Interaction Engine</a></li><li><a href="#section-16">16. Pet Interaction Engine</a></li><li><a href="#section-17">17. Mahjong Engine</a></li><li><a href="#section-18">18. Desktop / PC Engine</a></li><li><a href="#section-19">19. 多 Domain 同时运行</a></li><li><a href="#section-20">20. Domain Engine 动态加载</a></li><li><a href="#section-21">21. Domain Engine 不输出自然语言</a></li><li><a href="#section-22">22. ROS 2 的角色</a></li><li><a href="#section-23">23. 软件结构建议</a></li><li><a href="#section-24">24. Domain Pack</a></li><li><a href="#section-25">25. 第一阶段实现建议</a></li><li><a href="#section-26">26. 项目的核心定位</a></li><li><a href="#section-27">27. 最终架构思想</a></li></ol></details>
+    <div class="prose"><h2 id="section-1">1. 背景</h2>
+<p>对于个人开发者和小团队而言，直接构建或持续运行一个巨大的端到端多模态模型并不一定是最合适的路线。</p>
+<p>传统 Multimodal Foundation Model 倾向于：</p>
+<pre><code>Camera ─┐
+Audio ──┼──→ Large Multimodal Model ──→ Output
+Text ───┘</code></pre>
+<p>这种架构需要较大的计算资源、内存、训练数据和工程投入，并且大量连续感知数据最终都会进入大型模型。</p>
+<p>另一条更适合本地部署、机器人和个人开发者的路线是：</p>
+<blockquote><p>不构建一个理解所有模态的巨大模型，而是构建多个专业感知模型，并通过统一的 Semantic World Model 与 Cognitive Runtime 协作。</p></blockquote>
+<p>即：</p>
+<pre><code>Sensors
+   ↓
+Specialized Perception Models
+   ↓
+Semantic World Model
+   ↓
+Temporal Semantic Runtime
+   ↓
+Attention / Context
+   ↓
+LLM
+   ↓
+Intent
+   ↓
+Action</code></pre>
+<p>LLM 不再负责持续“观看世界”。</p>
+<p>LLM 只在需要语言理解、复杂推理、规划或未知情况处理时介入。</p>
+<hr>
+<h2 id="section-2">2. 核心设计原则</h2>
+<p>整个架构遵循几个基本原则。</p>
+<h3 id="detail-53">2.1 Semantic World Model ≠ LLM Context</h3>
+<p>World Model 可以包含非常大量的信息，例如：</p>
+<pre><code>30 FPS
+×
+100~500 semantic features
+×
+多个实体</code></pre>
+<p>这些数据用于维持机器对当前世界状态的表示，但不应该直接发送给 LLM。</p>
+<p>LLM 只消费经过压缩后的：</p>
+<pre><code>Event
+Episode
+Relevant State
+Memory</code></pre>
+<hr>
+<h3 id="detail-78">2.2 Asynchronous by Default</h3>
+<p>所有感知模型异步运行。</p>
+<p>例如：</p>
+<pre><code>Face Model        30 FPS
+Pose Model        15 FPS
+Object Detection  10 FPS
+IMU               200 Hz
+VAD               realtime
+ASR               variable latency
+LLM               on demand</code></pre>
+<p>不要求所有模型等待同步 Barrier。</p>
+<p>所有 Observation 使用统一时间基准：</p>
+<pre><code>observed_at
+emitted_at
+source_sample_id</code></pre>
+<p>系统根据时间戳进行 Temporal Alignment。</p>
+<p>原则：</p>
+<blockquote><p>Asynchronous by default, temporally aligned by timestamp.</p></blockquote>
+<hr>
+<h3 id="detail-112">2.3 LLM 不订阅高频 World State</h3>
+<p>错误方式：</p>
+<pre><code>World State
+    ↓
+30 FPS
+    ↓
+LLM</code></pre>
+<p>正确方式：</p>
+<pre><code>World State
+    ↓
+ΔWorld
+    ↓
+Temporal Semantic Engine
+    ↓
+Event
+    ↓
+Episode
+    ↓
+Attention
+    ↓
+LLM</code></pre>
+<p>同时 LLM 可以通过 Query API 主动查询 World Model。</p>
+<p>因此信息进入 LLM 有两种模式：</p>
+<pre><code>PUSH
+重要事件主动通知 LLM
+
+PULL
+LLM 根据任务查询 World Model</code></pre>
+<hr>
+<h2 id="section-3">3. 系统总体架构</h2>
+<pre><code>                         REAL WORLD
+                             │
+           ┌─────────────────┼─────────────────┐
+           │                 │                 │
+        Camera              Mic             Sensors
+           │                 │                 │
+           ▼                 ▼                 ▼
+      Face / Pose         VAD / ASR        IMU / etc
+      Object / VLM
+           │                 │                 │
+           └─────────────────┼─────────────────┘
+                             ▼
+                    Perception Adapter
+                             │
+                             ▼
+                       Observation IR
+                             │
+                             ▼
+                    ┌─────────────────┐
+                    │   WORLD STATE   │
+                    │                 │
+                    │ Entity          │
+                    │ State           │
+                    │ Relation        │
+                    │ Timeline        │
+                    └────────┬────────┘
+                             │
+                           ΔWorld
+                             │
+                             ▼
+              ┌───────────────────────────┐
+              │ TEMPORAL SEMANTIC RUNTIME │
+              │                           │
+              │ Change Filter             │
+              │ Temporal Detector         │
+              │ Event Correlator          │
+              │ Episode Manager           │
+              │ Evidence Chain            │
+              └────────────┬──────────────┘
+                           │
+                        Episode
+                           │
+                           ▼
+                    Interpretation
+                           │
+                           ▼
+                       Attention
+                           │
+                   important event?
+                    │             │
+                   YES            NO
+                    │             │
+                    ▼             X
+               Context Builder
+                    │
+                    ▼
+                   LLM
+                    │
+                  Intent
+                    │
+                    ▼
+              Action Planner
+                    │
+          ┌─────────┼─────────┐
+          ▼         ▼         ▼
+         TTS      Motion      UI</code></pre>
+<hr>
+<h2 id="section-4">4. Observation IR</h2>
+<p>所有不同感知模型通过 Adapter 转换成统一 Observation。</p>
+<p>例如：</p>
+<pre><code>Face Model
+    ↓
+Face Adapter
+    ↓
+Observation IR</code></pre>
+<pre><code>Pose Model
+    ↓
+Pose Adapter
+    ↓
+Observation IR</code></pre>
+<pre><code>ASR
+    ↓
+Speech Adapter
+    ↓
+Observation IR</code></pre>
+<p>基础结构可以设计为：</p>
+<pre><code>struct Observation {
+    id: ObservationId,
+
+    source: SourceId,
+    subject: EntityId,
+
+    source_sample_id: Option&lt;u64&gt;,
+
+    observed_start_ns: u64,
+    observed_end_ns: u64,
+    emitted_at_ns: u64,
+
+    feature: Feature,
+    value: Value,
+
+    confidence: f32,
+}</code></pre>
+<p>例如：</p>
+<pre><code>subject:
+    person_1
+
+feature:
+    face.mouth.left_corner.raise
+
+value:
+    0.82
+
+confidence:
+    0.96</code></pre>
+<p>Observation 应尽可能描述客观观察，而不是过早进行高级语义判断。</p>
+<p>例如：</p>
+<pre><code>mouth corners raised</code></pre>
+<p>优于：</p>
+<pre><code>happy</code></pre>
+<p>因为：</p>
+<pre><code>Observation
+    ↓
+Interpretation
+    ↓
+Cognition</code></pre>
+<p>应该保持分层。</p>
+<hr>
+<h2 id="section-5">5. World State</h2>
+<p>World State 是系统中心，而不是 LLM。</p>
+<p>例如：</p>
+<pre><code>World
+│
+├── entities
+│   │
+│   ├── person_1
+│   │   ├── visible
+│   │   ├── position
+│   │   ├── face
+│   │   ├── pose
+│   │   ├── gaze
+│   │   └── speech
+│   │
+│   ├── pet_1
+│   │
+│   └── cup_1
+│
+├── relations
+│   ├── person_1 near robot
+│   ├── cup_1 on table
+│   └── person_2 holding phone
+│
+├── robot
+│   ├── pose
+│   ├── current_action
+│   └── state
+│
+└── environment</code></pre>
+<p>World State 负责回答：</p>
+<blockquote><p>“机器目前认为世界是什么样子的？”</p></blockquote>
+<p>它可以是高频更新的。</p>
+<p>但高频 World State 不直接进入 LLM。</p>
+<hr>
+<h2 id="section-6">6. ΔWorld</h2>
+<p>Temporal Semantic Runtime 首先计算：</p>
+<pre><code>Previous World State
+        +
+Current World State
+        ↓
+      ΔWorld</code></pre>
+<p>核心问题不是：</p>
+<blockquote><p>世界现在是什么？</p></blockquote>
+<p>而是：</p>
+<blockquote><p>世界发生了什么变化？</p></blockquote>
+<p>例如：</p>
+<pre><code>gaze:
+elsewhere → robot</code></pre>
+<p>产生：</p>
+<pre><code>GAZE_TARGET_CHANGED</code></pre>
+<p>关系变化：</p>
+<pre><code>cup_1:
+ON(table)
+    ↓
+HELD_BY(person_1)</code></pre>
+<p>比杯子的 XYZ 坐标变化更有语义价值。</p>
+<p>不同 Feature 使用不同 Change Detector。</p>
+<h3 id="detail-417">Continuous</h3>
+<p>处理：</p>
+<pre><code>absolute delta
+velocity
+acceleration
+threshold crossing
+trend</code></pre>
+<h3 id="detail-429">Boolean</h3>
+<p>处理：</p>
+<pre><code>false → true
+true → false</code></pre>
+<h3 id="detail-438">Enum</h3>
+<p>处理：</p>
+<pre><code>state_A → state_B</code></pre>
+<h3 id="detail-446">Relation</h3>
+<p>处理：</p>
+<pre><code>RelationAdded
+RelationRemoved
+RelationChanged</code></pre>
+<p>同时使用：</p>
+<pre><code>Deadband
+Hysteresis
+Threshold
+Debounce</code></pre>
+<p>消除无意义的抖动。</p>
+<hr>
+<h2 id="section-7">7. Event</h2>
+<p>ΔWorld 本身不等于 Event。</p>
+<p>例如：</p>
+<pre><code>eye openness:
+0.8 → 0.1</code></pre>
+<p>不能直接判断：</p>
+<pre><code>BLINK</code></pre>
+<p>Blink 是一个时间模式：</p>
+<pre><code>OPEN
+ ↓
+CLOSED
+ ↓
+OPEN
+
+duration &lt; threshold</code></pre>
+<p>因此 Event Detector 本质上可以是一个小型状态机。</p>
+<pre><code>ΔWorld
+   ↓
+Temporal Detector
+   ↓
+Event</code></pre>
+<p>例如：</p>
+<pre><code>Event {
+    type: BLINK
+
+    subject: person_1
+
+    start: 12.100
+    end:   12.320
+
+    confidence: 0.96
+}</code></pre>
+<p>Event Detector 应该插件化：</p>
+<pre><code>detectors/
+├── blink
+├── gaze
+├── head_nod
+├── head_shake
+├── hand_raise
+├── hand_wave
+├── person_enter
+├── person_leave
+├── object_pickup
+├── object_drop
+└── speech</code></pre>
+<p>Detector 只订阅自己感兴趣的 Feature。</p>
+<p>例如：</p>
+<pre><code>eye.openness
+    ├── BlinkDetector
+    └── EyeClosureDetector
+
+hand.position
+    ├── HandRaiseDetector
+    └── WaveDetector</code></pre>
+<p>避免所有 Detector 每帧运行。</p>
+<hr>
+<h2 id="section-8">8. Episode</h2>
+<p>Event 仍然可能过于碎片化。</p>
+<p>例如：</p>
+<pre><code>12.0 LOOK_AT_ROBOT
+
+12.4 MOUTH_CORNERS_RAISED
+
+13.1 SPEECH_STARTED
+
+13.8 SPEECH(&quot;你好&quot;)
+
+14.0 HAND_WAVE</code></pre>
+<p>这些 Event 很可能属于同一个连续行为。</p>
+<p>因此需要：</p>
+<pre><code>Event
+ ↓
+Event Correlator
+ ↓
+Episode</code></pre>
+<p>Episode 根据：</p>
+<pre><code>Subject
+Target
+Temporal proximity
+Spatial proximity
+Semantic relation</code></pre>
+<p>进行关联。</p>
+<p>例如：</p>
+<pre><code>Episode #381
+
+subject:
+    person_1
+
+target:
+    robot
+
+start:
+    12.0
+
+end:
+    14.0
+
+events:
+    LOOK_AT_ROBOT
+    MOUTH_CORNERS_RAISED
+    SPEECH(&quot;你好&quot;)
+    HAND_WAVE</code></pre>
+<p>Episode 首先描述：</p>
+<blockquote><p>哪些事情属于同一个连续行为片段。</p></blockquote>
+<p>然后 Interpretation Layer 才可以进一步判断：</p>
+<pre><code>possible_intent:
+    greeting
+
+confidence:
+    0.94</code></pre>
+<hr>
+<h2 id="section-9">9. Episode 生命周期</h2>
+<p>Episode 不应该使用简单固定窗口：</p>
+<pre><code>每 5 秒 = 一个 Episode</code></pre>
+<p>而应该动态：</p>
+<pre><code>First related Event
+       ↓
+Episode OPEN
+       ↓
+related Event
+       ↓
+related Event
+       ↓
+timeout / context change
+       ↓
+Episode CLOSE</code></pre>
+<p>系统同时允许多个 Episode 存在：</p>
+<pre><code>Episode Manager
+
+├── #101
+│   Human interaction
+│
+├── #102
+│   Object manipulation
+│
+└── #103
+    Robot navigation</code></pre>
+<p>新 Event 通过 Episode Matcher 判断加入哪个 Episode。</p>
+<p>第一版可以使用简单评分：</p>
+<pre><code>score =
+    subject_match
+  + target_match
+  + temporal_proximity
+  + spatial_proximity
+  + semantic_relation</code></pre>
+<p>不需要 LLM。</p>
+<hr>
+<h2 id="section-10">10. Temporal Semantic Compression</h2>
+<p>整个架构的关键目标是逐层压缩信息。</p>
+<pre><code>Observation
+     ↓
+World State
+     ↓
+ΔWorld
+     ↓
+Event
+     ↓
+Episode
+     ↓
+Interpretation
+     ↓
+Attention
+     ↓
+LLM</code></pre>
+<p>例如一分钟感知可能产生：</p>
+<pre><code>270,000 semantic values</code></pre>
+<p>经过 ΔWorld：</p>
+<pre><code>8,000 meaningful changes</code></pre>
+<p>Event Detector：</p>
+<pre><code>200 events</code></pre>
+<p>Episode Correlator：</p>
+<pre><code>15 episodes</code></pre>
+<p>Attention：</p>
+<pre><code>3 episodes → LLM</code></pre>
+<p>具体比例依场景变化。</p>
+<p>核心原则是：</p>
+<blockquote><p>绝大多数感知数据永远不需要经过 LLM。</p></blockquote>
+<hr>
+<h2 id="section-11">11. Attention</h2>
+<p>Attention 不应该仅仅判断“有没有 Event”。</p>
+<p>应该考虑：</p>
+<pre><code>Information Value
+    =
+Novelty
+×
+Relevance
+×
+Confidence
+×
+Urgency</code></pre>
+<p>例如：</p>
+<pre><code>person sitting
+→
+person sitting</code></pre>
+<p>Novelty 接近 0：</p>
+<pre><code>IGNORE</code></pre>
+<p>但：</p>
+<pre><code>person standing
+→
+person suddenly falls</code></pre>
+<p>Novelty 与 Urgency 都很高：</p>
+<pre><code>ATTENTION</code></pre>
+<p>因此认知系统真正关注的是：</p>
+<pre><code>ΔWorld</code></pre>
+<p>而不是重复描述 World。</p>
+<hr>
+<h2 id="section-12">12. Push + Pull Cognitive Interface</h2>
+<p>LLM 不直接订阅 World State。</p>
+<p>LLM 通过两种方式获得信息。</p>
+<h3 id="detail-818">PUSH</h3>
+<p>Attention Engine 主动通知：</p>
+<pre><code>PERSON_ENTERED
+PERSON_SPOKE
+OBJECT_DROPPED
+GESTURE_DETECTED</code></pre>
+<h3 id="detail-829">PULL</h3>
+<p>LLM 可以查询：</p>
+<pre><code>get_visible_people()
+
+get_entity(person_1)
+
+get_recent_events(5s)
+
+get_recent_episode(person_1)
+
+get_relation(person_1, robot)
+
+get_objects_held_by(person_1)
+
+inspect_object(object_7)</code></pre>
+<p>因此 World Model 更像：</p>
+<blockquote><p>Semantic Database</p></blockquote>
+<p>而不是一个巨大 Prompt。</p>
+<hr>
+<h2 id="section-13">13. Evidence Chain</h2>
+<p>语义压缩过程中不能完全丢弃底层依据。</p>
+<p>应该保持：</p>
+<pre><code>Episode
+   ↓ evidence
+Event
+   ↓ evidence
+ΔWorld
+   ↓ source
+Observation
+   ↓ source
+Sensor Sample</code></pre>
+<p>例如：</p>
+<pre><code>Interpretation:
+possible_greeting
+        │
+        ▼
+Episode #381
+        │
+        ├── LOOK_AT_ROBOT
+        ├── HAND_WAVE
+        └── SPEECH(&quot;你好&quot;)
+                 │
+                 ▼
+          Observations
+                 │
+                 ▼
+           Sensor Frames</code></pre>
+<p>这样可以：</p>
+<ul><li>Debug；</li><li>回放；</li><li>重新 Interpretation；</li><li>解释系统判断依据；</li><li>更换算法重新计算；</li><li>训练未来的模型。</li></ul>
+<hr>
+<h2 id="section-14">14. Domain Semantic Engine</h2>
+<p>Temporal Semantic Engine 不应该成为一个万能规则系统。</p>
+<p>更合理的架构是：</p>
+<blockquote><p>通用 Temporal Semantic Runtime + 可插拔 Domain Semantic Engines</p></blockquote>
+<p>例如：</p>
+<pre><code>                    World State
+                         │
+                       ΔWorld
+                         │
+       ┌─────────────────┼──────────────────┐
+       ▼                 ▼                  ▼
+ Human Social          Pet              Mahjong
+    Engine            Engine             Engine
+       │                 │                  │
+       └─────────────────┼──────────────────┘
+                         │
+                      Episodes
+                         │
+                         ▼
+                   Cognitive Layer</code></pre>
+<p>Domain Engine 定义：</p>
+<pre><code>什么 Feature 重要
+
+什么 ΔWorld 有意义
+
+什么时间模式构成 Event
+
+哪些 Event 应该组成 Episode
+
+Episode 可以如何 Interpretation</code></pre>
+<hr>
+<h2 id="section-15">15. Human Interaction Engine</h2>
+<p>关注：</p>
+<pre><code>face
+gaze
+pose
+speech
+distance
+person ↔ robot relations</code></pre>
+<p>检测：</p>
+<pre><code>LOOK_AT_ROBOT
+APPROACH_ROBOT
+HAND_WAVE
+SPEECH_TURN
+INTERRUPTION
+TURN_TAKING</code></pre>
+<p>形成：</p>
+<pre><code>Human Interaction Episode</code></pre>
+<hr>
+<h2 id="section-16">16. Pet Interaction Engine</h2>
+<p>关注：</p>
+<pre><code>pet.position
+pet.pose
+pet.head
+pet.tail
+pet.vocalization
+pet ↔ owner
+pet ↔ robot</code></pre>
+<p>产生：</p>
+<pre><code>PET_APPROACHED
+FOLLOWING
+VOCALIZATION
+PLAY_SEQUENCE</code></pre>
+<p>底层动物姿态模型可以随时替换，不影响 Cognitive Runtime。</p>
+<hr>
+<h2 id="section-17">17. Mahjong Engine</h2>
+<p>World State：</p>
+<pre><code>players
+tiles
+table
+turn
+round
+relations</code></pre>
+<p>摄像头可能每秒产生大量牌的位置变化。</p>
+<p>但 Mahjong Engine 将：</p>
+<pre><code>tile moved</code></pre>
+<p>进一步理解为：</p>
+<pre><code>PLAYER_DISCARDED_TILE
+PLAYER_DREW_TILE
+PLAYER_CLAIMED_TILE</code></pre>
+<p>连续 Event 可以形成：</p>
+<pre><code>Episode:
+player_3 CHI from player_2</code></pre>
+<p>因此大量视频数据最终变成少量游戏事实。</p>
+<hr>
+<h2 id="section-18">18. Desktop / PC Engine</h2>
+<p>PC 也可以使用同样的模型：</p>
+<pre><code>Screen
+Accessibility Tree
+Mouse
+Keyboard
+Application State
+        ↓
+World State
+        ↓
+ΔWorld
+        ↓
+Desktop Semantic Engine</code></pre>
+<p>例如：</p>
+<pre><code>USER_RUN_PROGRAM
+        ↓
+APPLICATION_ERROR
+        ↓
+USER_OPEN_TERMINAL</code></pre>
+<p>形成：</p>
+<pre><code>Episode:
+
+User attempted to run the program
+and encountered a missing dependency.</code></pre>
+<p>LLM 不需要持续观看整个屏幕视频。</p>
+<hr>
+<h2 id="section-19">19. 多 Domain 同时运行</h2>
+<p>多个 Engine 可以共享 World State：</p>
+<pre><code>                    World State
+                         │
+          ┌──────────────┼──────────────┐
+          ▼              ▼              ▼
+       Social         Desktop        Mahjong
+       Engine          Engine         Engine</code></pre>
+<p>例如：</p>
+<pre><code>Mahjong Engine:
+
+player_2 discarded 5筒</code></pre>
+<p>同时：</p>
+<pre><code>Human Engine:
+
+person_1 looked toward robot
+person_1 said:
+&quot;你觉得我要不要碰？&quot;</code></pre>
+<p>Context Builder 合并：</p>
+<pre><code>Current interaction:
+
+Person 1 is looking toward you and asks:
+&quot;你觉得我要不要碰？&quot;
+
+Relevant Mahjong state:
+
+Player 2 just discarded 5筒.
+...</code></pre>
+<p>然后才交给 LLM。</p>
+<hr>
+<h2 id="section-20">20. Domain Engine 动态加载</h2>
+<p>不同环境启用不同认知能力。</p>
+<p>客厅：</p>
+<pre><code>Human Social     ON
+Pet              ON
+Mahjong          OFF
+Desktop          OFF</code></pre>
+<p>发现麻将场景：</p>
+<pre><code>load Mahjong Engine</code></pre>
+<p>进入电脑工作场景：</p>
+<pre><code>load Desktop Engine</code></pre>
+<p>因此：</p>
+<pre><code>             Cognitive Runtime
+                     │
+               Context Router
+                     │
+       ┌─────────────┼─────────────┐
+       ▼             ▼             ▼
+     Social       Desktop       Mahjong
+     Engine        Engine        Engine</code></pre>
+<p>适合本地有限算力环境。</p>
+<hr>
+<h2 id="section-21">21. Domain Engine 不输出自然语言</h2>
+<p>Domain Engine 应该产生结构化 Semantic IR。</p>
+<p>不要：</p>
+<pre><code>&quot;张三刚才打了一张五筒。&quot;</code></pre>
+<p>而应该：</p>
+<pre><code>Event {
+    domain: MAHJONG
+    type: TILE_DISCARD
+
+    actor: player_2
+    object: tile_5_dot
+}</code></pre>
+<p>自然语言转换只发生在：</p>
+<pre><code>Context Builder</code></pre>
+<p>这样整个 Semantic Runtime 不依赖具体 LLM。</p>
+<hr>
+<h2 id="section-22">22. ROS 2 的角色</h2>
+<p>如果目标是机器人，不需要重新开发底层消息系统。</p>
+<p>ROS 2 可以负责：</p>
+<pre><code>Node
+Topic
+DDS
+QoS
+Timestamp
+TF
+Action
+Parameter
+Discovery
+rosbag</code></pre>
+<p>整体关系：</p>
+<pre><code>ROS 2
+│
+│ Physical / Sensor World
+│
+▼
+Perception Models
+│
+▼
+Semantic World Model
+│
+▼
+Temporal Semantic Runtime
+│
+▼
+Cognitive Runtime
+│
+▼
+LLM</code></pre>
+<p>可以把 ROS 2 理解为：</p>
+<blockquote><p>神经系统 / 通信基础设施</p></blockquote>
+<p>而 Temporal Semantic Runtime 解决：</p>
+<blockquote><p>感知如何逐渐变成“事情”。</p></blockquote>
+<hr>
+<h2 id="section-23">23. 软件结构建议</h2>
+<pre><code>semantic-runtime/
+│
+├── core/
+│   ├── world_state
+│   ├── delta
+│   ├── entity
+│   ├── relation
+│   ├── timeline
+│   ├── event
+│   ├── episode
+│   ├── evidence
+│   └── engine_runtime
+│
+├── perception/
+│   └── adapters/
+│
+├── domains/
+│   │
+│   ├── human_social/
+│   │   ├── features
+│   │   ├── detectors
+│   │   ├── correlators
+│   │   └── interpretations
+│   │
+│   ├── pet/
+│   │   ├── features
+│   │   ├── detectors
+│   │   └── correlators
+│   │
+│   ├── mahjong/
+│   │   ├── features
+│   │   ├── rules
+│   │   ├── detectors
+│   │   └── correlators
+│   │
+│   └── desktop/
+│       ├── ui_state
+│       ├── detectors
+│       └── correlators
+│
+└── cognition/
+    ├── attention
+    ├── interpretation
+    ├── context_builder
+    ├── memory
+    └── llm</code></pre>
+<hr>
+<h2 id="section-24">24. Domain Pack</h2>
+<p>Domain Engine 可以进一步定义为可加载 Domain Pack：</p>
+<pre><code>domain: mahjong
+
+subscribe:
+  - tile.position
+  - tile.owner
+  - tile.orientation
+  - player.hand
+  - game.turn
+
+detectors:
+  - tile_draw
+  - tile_discard
+  - chi
+  - peng
+  - gang
+  - hu
+
+episode_timeout: 3s</code></pre>
+<p>Runtime 根据 Domain Pack 自动建立：</p>
+<pre><code>Feature
+    ↓
+Detector
+    ↓
+Event
+    ↓
+Episode</code></pre>
+<hr>
+<h2 id="section-25">25. 第一阶段实现建议</h2>
+<p>不要一开始实现完整机器人系统。</p>
+<p>先验证三个核心数据结构：</p>
+<pre><code>WorldDelta v0.1
+Event v0.1
+Episode v0.1</code></pre>
+<p>然后实现四个测试 Case：</p>
+<h3 id="detail-1371">Case 1：Blink</h3>
+<p>验证：</p>
+<pre><code>continuous feature
+→ temporal pattern
+→ Event</code></pre>
+<h3 id="detail-1381">Case 2：Hand Wave</h3>
+<p>验证：</p>
+<pre><code>multi-feature motion
+→ temporal pattern
+→ Event</code></pre>
+<h3 id="detail-1391">Case 3：Pick Up Cup</h3>
+<p>验证：</p>
+<pre><code>position changes
+→ relation changes
+→ Event</code></pre>
+<h3 id="detail-1401">Case 4：Greeting</h3>
+<p>验证：</p>
+<pre><code>gaze
++
+mouth movement
++
+speech
++
+hand wave
+    ↓
+multiple Events
+    ↓
+Episode</code></pre>
+<p>如果这四种情况可以使用同一套：</p>
+<pre><code>WorldDelta
+Event
+Episode
+Evidence</code></pre>
+<p>表达，那么 Core Runtime 的基本抽象就成立了。</p>
+<hr>
+<h2 id="section-26">26. 项目的核心定位</h2>
+<p>这个项目不是：</p>
+<pre><code>Another LLM Agent</code></pre>
+<p>也不是：</p>
+<pre><code>Another ROS Middleware</code></pre>
+<p>更不是：</p>
+<pre><code>Another Multimodal Foundation Model</code></pre>
+<p>它真正解决的是：</p>
+<pre><code>Continuous Reality
+        ↓
+Perception
+        ↓
+World State
+        ↓
+ΔWorld
+        ↓
+Temporal Pattern
+        ↓
+Event
+        ↓
+Episode
+        ↓
+Attention
+        ↓
+Cognition</code></pre>
+<p>换句话说：</p>
+<blockquote><p><strong>把连续、高频、低层的现实世界状态流，转换成稀疏、结构化、具有时间意义的“事情”。</strong></p></blockquote>
+<p>最终形成：</p>
+<pre><code>Physical World
+      ↓
+Perception
+      ↓
+Semantic World
+      ↓
+Temporal Semantic Runtime
+      ↓
+Cognitive Context
+      ↓
+LLM / Reasoning Model
+      ↓
+Intent
+      ↓
+Action
+      ↓
+Physical World</code></pre>
+<hr>
+<h2 id="section-27">27. 最终架构思想</h2>
+<p>传统多模态 AI 的思路更接近：</p>
+<blockquote><p>让一个足够大的模型持续理解整个世界。</p></blockquote>
+<p>Temporal Semantic Runtime 采取另一条路线：</p>
+<blockquote><p>使用多个专业感知模型持续观察世界，用 World Model 保存世界，用 Temporal Semantic Engine 将连续变化压缩成 Event 与 Episode，只把真正值得认知的信息交给 LLM。</p></blockquote>
+<p>因此：</p>
+<pre><code>Sensor Data
+     ↓
+大量 Observation
+     ↓
+World State
+     ↓
+少量 meaningful Δ
+     ↓
+更少的 Events
+     ↓
+少量 Episodes
+     ↓
+极少量 Attention Events
+     ↓
+LLM</code></pre>
+<p>这使得个人开发者和小团队有机会利用普通本地硬件构建持续运行的多模态智能系统，而不必直接与大型端到端多模态 Foundation Model 在模型规模上竞争。</p>
+<p>项目真正值得长期积累的部分是：</p>
+<pre><code>Semantic IR
+World Model
+Temporal Semantic Runtime
+Domain Semantic Engines
+Evidence Chain
+Attention
+Context Builder
+Memory</code></pre>
+<p>其中最核心的抽象可以总结成一句话：</p>
+<blockquote><p><strong>不要让 LLM 持续观看世界；让系统先把世界发生的变化组织成“事情”，再让 LLM 去理解这些事情。</strong></p></blockquote></div>
+  </article></main>
+  <footer><a href="index.html">返回 Blog</a><a href="#top">回到顶部 ↑</a><span>sukimiya's workshop</span></footer>
+</body>
+</html>
