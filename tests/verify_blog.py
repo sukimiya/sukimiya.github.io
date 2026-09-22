@@ -11,6 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 BLOG = ROOT / "blog"
 NEW_ARTICLE = BLOG / "temporal-semantic-runtime.html"
 V2_ARTICLE = BLOG / "temporal-semantic-runtime-v2.html"
+REACTION_ARTICLE = BLOG / "reaction-path-and-cognitive-path.html"
+MEMORY_ARTICLE = BLOG / "memory-runtime.html"
 
 
 class PageParser(HTMLParser):
@@ -45,10 +47,14 @@ def resolve_local(page: Path, ref: str) -> Path | None:
 def main() -> None:
     assert NEW_ARTICLE.exists(), "missing Temporal Semantic Runtime article"
     assert V2_ARTICLE.exists(), "missing Temporal Semantic Runtime v2.0 article"
+    assert REACTION_ARTICLE.exists(), "missing Reaction Path article"
+    assert MEMORY_ARTICLE.exists(), "missing Memory Runtime article"
 
     index = parse(BLOG / "index.html")
     assert "temporal-semantic-runtime.html" in index.links, "Blog index has no link to the new article"
     assert "temporal-semantic-runtime-v2.html" in index.links, "Blog index has no link to the v2.0 article"
+    assert "reaction-path-and-cognitive-path.html" in index.links, "Blog index has no Reaction Path entry"
+    assert "memory-runtime.html" in index.links, "Blog index has no Memory Runtime entry"
 
     pages = list(BLOG.glob("*.html"))
     for page in pages:
@@ -66,6 +72,14 @@ def main() -> None:
     v2_article = V2_ARTICLE.read_text(encoding="utf-8")
     for heading in ("Reaction Path", "Cognitive Path", "Action Arbitration", "Safety Path"):
         assert heading in v2_article, f"v2.0 article is missing core section: {heading}"
+
+    reaction_article = REACTION_ARTICLE.read_text(encoding="utf-8")
+    assert reaction_article.count('class="toc"') == 1, "Reaction Path article lacks a table of contents"
+    assert "Temporary Goal" in reaction_article and "最终架构" in reaction_article
+
+    memory_article = MEMORY_ARTICLE.read_text(encoding="utf-8")
+    assert memory_article.count('class="toc"') == 1, "Memory Runtime article lacks a table of contents"
+    assert "Hot KV Cache" in memory_article and "Full Archive" in memory_article
 
     print(f"Verified {len(pages)} Blog pages and all local references.")
 

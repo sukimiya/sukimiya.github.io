@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="具身智能为什么需要快速反应与认知推理并行：从控制、安全到临时目标和行动仲裁。">
+  <title>Reaction Path 与 Cognitive Path：具身智能的双路径认知架构 | sukimiya's workshop</title>
+  <link rel="stylesheet" href="blog.css">
+</head>
+<body id="top">
+  <a class="skip-link" href="#main">跳到正文</a>
+  <header class="site-header"><nav aria-label="主导航">
+    <a class="brand" href="../index.html"><img src="../img/logo2.svg" width="30" height="30" alt="">sukimiya's workshop</a>
+    <div class="nav-links"><a href="../index.html">首页</a><a href="index.html" aria-current="true">Blog</a><a href="https://github.com/sukimiya">GitHub</a></div>
+  </nav></header>
+  <main id="main"><article>
+    <header class="article-header"><a class="eyebrow" href="index.html">BLOG / AI · 具身智能</a><h1>Reaction Path 与 Cognitive Path：具身智能的双路径认知架构</h1></header>
+    <details class="toc"><summary>文章目录</summary><ol><li><a href="#section-1">1. Reaction Path：快速反应路径</a></li><li><a href="#section-2">2. Cognitive Path：认知推理路径</a></li><li><a href="#section-3">3. 两条路径必须同时存在</a></li><li><a href="#section-4">4. 一个打麻将的例子</a></li><li><a href="#section-5">5. Cognitive Path 不应该直接控制每一个动作</a></li><li><a href="#section-6">6. Temporary Goal 是两条路径之间的重要接口</a></li><li><a href="#section-7">7. Reaction Path 仍然拥有最终安全约束</a></li><li><a href="#section-8">8. 最终架构</a></li></ol></details>
+    <div class="prose"><p>具身智能系统面临一个与传统 LLM 完全不同的问题：</p>
+<p><strong>机器人不仅需要思考，还必须及时行动。</strong></p>
+<p>如果所有传感器信息都先进入大模型，等待 LLM/VLM 完成推理，然后再决定机器人动作，那么整个系统不仅延迟高，而且很难保证实时性。</p>
+<p>但如果机器人完全依赖预先训练好的 Policy 或规则进行快速反应，它又很难理解复杂的社会环境、临时目标和长期任务。</p>
+<p>因此，一个更加合理的具身智能架构应该同时存在两条路径：</p>
+<p><strong>Reaction Path 与 Cognitive Path。</strong></p>
+<hr>
+<h2 id="section-1">1. Reaction Path：快速反应路径</h2>
+<p>Reaction Path 负责：</p>
+<p><strong>低延迟、确定性较高、需要立即执行的行为。</strong></p>
+<p>典型任务包括：</p>
+<ul><li>平衡控制</li><li>避障</li><li>碰撞保护</li><li>抓取修正</li><li>电机控制</li><li>紧急停止</li><li>已学习技能的快速执行</li></ul>
+<p>其基本结构可以表示为：</p>
+<pre><code>Sensors
+   │
+   ▼
+Perception
+   │
+   ▼
+Reaction Policy
+   │
+   ▼
+Motor Controller
+   │
+   ▼
+Actuator</code></pre>
+<p>这条路径不应该依赖大型 LLM。</p>
+<p>它可能主要运行：</p>
+<pre><code>Control Policy
+Small Neural Network
+VLA Policy
+State Machine
+MPC
+RL Policy
+Safety Controller</code></pre>
+<p>时间尺度可能处于：</p>
+<pre><code>1~10 ms     Motor Control
+10~100 ms   Perception / Motion</code></pre>
+<p>Reaction Path 的核心目标不是“理解整个世界”，而是：</p>
+<blockquote><p><strong>在正确的时间做出足够正确的动作。</strong></p></blockquote>
+<hr>
+<h2 id="section-2">2. Cognitive Path：认知推理路径</h2>
+<p>Cognitive Path 处理另外一类问题：</p>
+<p><strong>当前到底应该做什么？</strong></p>
+<p>它负责：</p>
+<pre><code>Understanding
+Reasoning
+Planning
+Goal Management
+Social Understanding
+Memory Retrieval
+World Model
+Long-horizon Decision</code></pre>
+<p>基本结构：</p>
+<pre><code>                 Context
+                    │
+                    ▼
+                 VLM/LLM
+                    │
+              World Model
+                    │
+                 Memory
+                    │
+               Goal System
+                    │
+                 Planner
+                    │
+               Task / Skill</code></pre>
+<p>它的时间尺度可以明显更慢：</p>
+<pre><code>100 ms
+1 second
+数秒
+甚至更长</code></pre>
+<p>因为 Cognitive Path 解决的不是电机下一毫秒应该输出多少力矩，而是：</p>
+<blockquote><p><strong>为什么要做这件事？</strong></p></blockquote>
+<hr>
+<h2 id="section-3">3. 两条路径必须同时存在</h2>
+<p>真正关键的不是二选一。</p>
+<p>而是：</p>
+<pre><code>                    Environment
+                         │
+                       Sensors
+                         │
+                ┌────────┴────────┐
+                │                 │
+                ▼                 ▼
+
+          Reaction Path      Cognitive Path
+                │                 │
+          Fast Policy          Reasoning
+                │              World Model
+                │              Memory
+                │              Planning
+                │                 │
+                └────────┬────────┘
+                         │
+                    Action Layer
+                         │
+                      Robot</code></pre>
+<p>Cognitive Path 可以改变 Reaction Path 的目标和约束。</p>
+<p>但 Reaction Path 不应该等待 Cognitive Path 才运行。</p>
+<hr>
+<h2 id="section-4">4. 一个打麻将的例子</h2>
+<p>假设一个陪伴机器人正在陪四位老人打麻将。</p>
+<p>上家打出一张八筒。</p>
+<p>从纯游戏策略来看：</p>
+<pre><code>牌型满足胡牌条件
+        ↓
+       胡牌</code></pre>
+<p>Reaction Policy 很容易学会这种映射。</p>
+<p>但是此时机器人同时观察到：</p>
+<pre><code>对家眼睛眯了一下
++
+嘴角上扬
++
+老人今天情绪很好</code></pre>
+<p>与此同时，机器人当前存在一个更高层 Goal：</p>
+<blockquote><p><strong>陪老人开心，比赢牌更重要。</strong></p></blockquote>
+<p>于是 Cognitive Path 可能推导：</p>
+<pre><code>当前可以胡牌
+        │
+        ▼
+游戏收益：高
+        │
+        ▼
+但当前 Social Goal：
+老人娱乐体验 &gt; 游戏胜率
+        │
+        ▼
+暂时放弃胡牌</code></pre>
+<p>最终：</p>
+<pre><code>Cognitive Path
+      │
+      ▼
+Temporary Goal
+
+&quot;不要最大化胜率，
+最大化老人娱乐体验&quot;
+
+      │
+      ▼
+Reaction / Game Policy</code></pre>
+<p>于是机器人选择：</p>
+<p><strong>不胡。</strong></p>
+<p>这里体现了双路径架构真正重要的能力：</p>
+<blockquote><p>Reaction Path 负责“我会怎么做”，Cognitive Path 决定“现在为什么这么做”。</p></blockquote>
+<hr>
+<h2 id="section-5">5. Cognitive Path 不应该直接控制每一个动作</h2>
+<p>例如 Cognitive Path 输出：</p>
+<pre><code>拿起桌上的杯子</code></pre>
+<p>它不应该继续计算：</p>
+<pre><code>肩关节 +1.2°
+肘关节 -0.7°
+手腕 +0.3°
+……</code></pre>
+<p>正确结构应该是：</p>
+<pre><code>Cognitive Path
+
+&quot;把红色杯子递给用户&quot;
+
+        ↓
+
+Task Planner
+
+        ↓
+
+Manipulation Skill
+
+        ↓
+
+Reaction / Motion Policy
+
+        ↓
+
+Motor Controller</code></pre>
+<p>这样大模型负责：</p>
+<p><strong>Intent / Goal / Constraint</strong></p>
+<p>而底层 Policy 负责：</p>
+<p><strong>Execution。</strong></p>
+<hr>
+<h2 id="section-6">6. Temporary Goal 是两条路径之间的重要接口</h2>
+<p>机器人真正需要的不只是永久规则。</p>
+<p>现实世界大量任务是：</p>
+<p><strong>临时目标。</strong></p>
+<p>例如：</p>
+<pre><code>今天陪老人玩，所以不要太认真赢。
+
+这个杯子很珍贵，动作慢一点。
+
+孩子正在睡觉，所有动作降低噪声。
+
+用户今天赶时间，优先完成任务。
+
+这里地面湿滑，降低移动速度。</code></pre>
+<p>这些信息不应该重新训练 Policy。</p>
+<p>而应该进入：</p>
+<pre><code>Temporary Goal
++
+Constraint
++
+Priority</code></pre>
+<p>再动态影响 Reaction Path。</p>
+<hr>
+<h2 id="section-7">7. Reaction Path 仍然拥有最终安全约束</h2>
+<p>Cognitive Path 可以说：</p>
+<pre><code>赶快过去。</code></pre>
+<p>但 Reaction Path / Safety Layer 可以拒绝：</p>
+<pre><code>前方有人
+速度过高
+碰撞风险</code></pre>
+<p>因此：</p>
+<pre><code>Cognitive Goal
+      │
+      ▼
+Action Proposal
+      │
+      ▼
+Safety / Reaction Layer
+      │
+   ┌──┴──┐
+   │     │
+Accept Reject</code></pre>
+<p>LLM 不能绕过底层安全控制。</p>
+<hr>
+<h2 id="section-8">8. 最终架构</h2>
+<p>完整系统可以抽象为：</p>
+<pre><code>                    Sensors
+                       │
+            ┌──────────┴──────────┐
+            │                     │
+            ▼                     ▼
+
+       Reaction Path         Cognitive Path
+
+       Perception            VLM / LLM
+       Fast Policy           World Model
+       Motion Policy         Memory
+       Safety                Goal System
+            │                Planning
+            │                     │
+            └──────────┬──────────┘
+                       │
+                 Action Arbitration
+                       │
+                  Robot Control
+                       │
+                    Actuator</code></pre>
+<p>双路径架构的核心不是让机器人拥有两个“大脑”。</p>
+<p>而是承认一个基本事实：</p>
+<blockquote><p><strong>现实世界既需要毫秒级反应，也需要秒级甚至分钟级思考。</strong></p></blockquote>
+<p>试图用一个模型同时解决两个时间尺度的问题，很可能既浪费算力，又降低可靠性。</p>
+<p>因此真正灵活的具身智能应该同时拥有：</p>
+<p><strong>Reaction Path——快速、稳定、可预测。</strong></p>
+<p>以及：</p>
+<p><strong>Cognitive Path——理解、推理、规划、调整目标。</strong></p>
+<p>两者共同运行，才可能形成真正具有适应性的机器人行为系统。</p></div>
+  </article></main>
+  <footer><a href="index.html">返回 Blog</a><a href="#top">回到顶部 ↑</a><span>sukimiya's workshop</span></footer>
+</body>
+</html>
